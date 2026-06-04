@@ -27,10 +27,44 @@ class SyncService {
     final prefs = await SharedPreferences.getInstance();
     _deviceId = prefs.getString('sync_device_id') ?? _uuid.v4();
     await prefs.setString('sync_device_id', _deviceId);
+
+    final exportDone = prefs.getBool('sync_initial_export_done') ?? false;
+    if (!exportDone) {
+      await _exportAllLocalData();
+      await prefs.setBool('sync_initial_export_done', true);
+    }
+
     _connectivitySub = _connectivity.onConnectivityChanged.listen(_onConnectivityChange);
     _periodicTimer = Timer.periodic(const Duration(minutes: 5), (_) => sync());
     _initialized = true;
     sync();
+  }
+
+  Future<void> _exportAllLocalData() async {
+    final db = await _db.database;
+    final tables = ['companies', 'customers', 'products', 'documents'];
+    for (final table in tables) {
+      final rows = await db.query(table);
+      for (final row in rows) {
+        final id = row['id'] as int;
+        await _db.addToSyncQueue(
+          tableName: table,
+          recordId: id,
+          operation: 'INSERT',
+          data: Map<String, dynamic>.from(row),
+        );
+      }
+    }
+    final items = await db.query('document_items');
+    for (final row in items) {
+      final id = row['id'] as int;
+      await _db.addToSyncQueue(
+        tableName: 'document_items',
+        recordId: id,
+        operation: 'INSERT',
+        data: Map<String, dynamic>.from(row),
+      );
+    }
   }
 
   void _onConnectivityChange(List<ConnectivityResult> results) {
