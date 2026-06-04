@@ -1,7 +1,7 @@
 class SupabaseConfig {
-  static const String supabaseUrl = 'https://tu-proyecto.supabase.co';
+  static const String supabaseUrl = 'https://cklheguvwmxefilkcsjz.supabase.co';
   static const String publishableKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.tu-anon-key';
+      'sb_publishable_Hi8zMJt2EhQEO3LRa5eoEA_pp7L__q1';
 
   static const String companiesTable = 'companies';
   static const String customersTable = 'customers';

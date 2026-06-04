@@ -1,0 +1,53 @@
+headersOrigin = "config"
+plugins = []
+redirects = []
+
+[functions]
+
+[functions."*"]
+
+[build]
+publish = "C:\\proyectos_flutter\\facture\\build\\web"
+publishOrigin = "config"
+commandOrigin = "config"
+command = "flutter build web --release"
+
+[build.environment]
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[[headers]]
+for = "/*"
+
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"
+X-Frame-Options = "DENY"
+X-Content-Type-Options = "nosniff"
+
+[[headers]]
+for = "*.js"
+
+[headers.values]
+Content-Type = "application/javascript"
+
+[[headers]]
+for = "*.wasm"
+
+[headers.values]
+Content-Type = "application/wasm"
+
+[[headers]]
+for = "assets/**"
+
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
