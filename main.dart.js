@@ -9053,7 +9053,7 @@ q=$.b6P()
 if($.aUD!=null)A.n1("*** sqflite warning ***\n\nYou are changing sqflite default factory.\nBe aware of the potential side effects. Any library using sqflite\nwill have this factory as the default for all operations.\n\n*** sqflite warning ***\n")
 $.aUD=q
 s=2
-return A.h(A.axh("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.tu-anon-key","https://tu-proyecto.supabase.co"),$async$aQI)
+return A.h(A.axh("sb_publishable_Hi8zMJt2EhQEO3LRa5eoEA_pp7L__q1","https://cklheguvwmxefilkcsjz.supabase.co"),$async$aQI)
 case 2:$.p3().Ax()
 if($.a4==null)A.azu()
 q=$.a4
