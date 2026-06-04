@@ -30,6 +30,7 @@ class DatabaseService {
       path,
       version: AppConstants.dbVersion,
       onCreate: _createTables,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -98,7 +99,10 @@ class DatabaseService {
         status TEXT DEFAULT 'EMITIDO',
         sunat_ticket TEXT,
         sunat_cdr TEXT,
-        notes TEXT
+        notes TEXT,
+        tax_regime TEXT DEFAULT 'GENERAL',
+        delivery_date TEXT,
+        delivery_address TEXT DEFAULT ''
       )
     ''');
 
@@ -155,6 +159,16 @@ class DatabaseService {
         'CREATE INDEX idx_documents_date ON documents(issue_date)');
     await db.execute(
         'CREATE INDEX idx_documents_company ON documents(company_id)');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+          "ALTER TABLE documents ADD COLUMN tax_regime TEXT DEFAULT 'GENERAL'");
+      await db.execute("ALTER TABLE documents ADD COLUMN delivery_date TEXT");
+      await db.execute(
+          "ALTER TABLE documents ADD COLUMN delivery_address TEXT DEFAULT ''");
+    }
   }
 
   Future<int> insertCompany(Company company) async {

@@ -18,7 +18,9 @@ class _SalesListScreenState extends State<SalesListScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDocuments();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDocuments();
+    });
   }
 
   void _loadDocuments() {
@@ -56,6 +58,9 @@ class _SalesListScreenState extends State<SalesListScreen> {
               const PopupMenuItem(
                   value: 'Nota de Venta',
                   child: Text('Notas de Venta')),
+              const PopupMenuItem(
+                  value: 'Pedido',
+                  child: Text('Pedidos')),
               const PopupMenuItem(
                   value: 'Nota de Crédito',
                   child: Text('Notas de Crédito')),

@@ -5,6 +5,7 @@ import '../models/document.dart';
 import '../models/product.dart';
 import '../services/database_service.dart';
 import '../services/sunat_service.dart';
+import '../utils/api_result.dart';
 
 class DocumentProvider extends ChangeNotifier {
   final DatabaseService _db = DatabaseService();
@@ -46,9 +47,9 @@ class DocumentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addItem(Product product, double quantity) {
+  void addItem(Product product, double quantity, {String taxRegime = 'GENERAL'}) {
     final subtotal = product.salePrice * quantity;
-    final igv = subtotal * 0.18;
+    final igv = taxRegime == 'RUS' ? 0.0 : subtotal * 0.18;
     final total = subtotal + igv;
 
     _currentItems.add(DocumentItem(
@@ -88,8 +89,13 @@ class DocumentProvider extends ChangeNotifier {
     required String series,
     required String paymentMethod,
     String? notes,
+    String taxRegime = 'GENERAL',
+    DateTime? deliveryDate,
+    String deliveryAddress = '',
   }) async {
-    if (_selectedCustomer == null && documentType != 'Nota de Venta') {
+    if (_selectedCustomer == null &&
+        documentType != 'Nota de Venta' &&
+        documentType != 'Pedido') {
       return null;
     }
 
@@ -107,11 +113,14 @@ class DocumentProvider extends ChangeNotifier {
       customerName: _selectedCustomer?.displayName ?? 'CLIENTE VARIOS',
       customerAddress: _selectedCustomer?.address ?? '',
       subtotal: subtotal,
-      igv: igv,
-      total: total,
+      igv: taxRegime == 'RUS' ? 0 : igv,
+      total: taxRegime == 'RUS' ? subtotal : total,
       paymentMethod: paymentMethod,
-      status: 'EMITIDO',
+      status: documentType == 'Pedido' ? 'PEDIDO' : 'EMITIDO',
       notes: notes,
+      taxRegime: taxRegime,
+      deliveryDate: deliveryDate,
+      deliveryAddress: deliveryAddress,
     );
 
     final docId = await _db.insertDocument(doc);
@@ -130,24 +139,29 @@ class DocumentProvider extends ChangeNotifier {
     return doc.copyWith(id: docId);
   }
 
-  Future<Map<String, dynamic>> sendToSunat(
+  Future<ApiResult<Map<String, dynamic>>> sendToSunat(
       InvoiceDocument document, Company company) async {
     _isSendingToSunat = true;
     notifyListeners();
 
-    final items = await _db.getDocumentItems(document.id!);
-    final result = await _sunat.sendDocument(document, items, company);
+    try {
+      final items = await _db.getDocumentItems(document.id!);
+      final result = await _sunat.sendDocument(document, items, company);
 
-    if (result['success']) {
-      await _db.updateDocument(document.copyWith(
-        status: 'ENVIADO',
-        sunatTicket: result['ticket'],
-      ));
+      if (result.isSuccess && result.data != null) {
+        await _db.updateDocument(document.copyWith(
+          status: 'ENVIADO',
+          sunatTicket: result.data!['ticket'],
+        ));
+      }
+
+      return result;
+    } catch (e) {
+      return ApiResult.failure('Error al enviar a SUNAT: $e');
+    } finally {
+      _isSendingToSunat = false;
+      notifyListeners();
     }
-
-    _isSendingToSunat = false;
-    notifyListeners();
-    return result;
   }
 
   Future<void> printDocument(InvoiceDocument document, Company company) async {

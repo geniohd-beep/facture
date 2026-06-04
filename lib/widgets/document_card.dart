@@ -108,6 +108,8 @@ class DocumentCard extends StatelessWidget {
     switch (document.status) {
       case 'BORRADOR':
         return Colors.grey;
+      case 'PEDIDO':
+        return Colors.purple;
       case 'EMITIDO':
         return Colors.orange;
       case 'ENVIADO':

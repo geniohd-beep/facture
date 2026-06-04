@@ -15,7 +15,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<CustomerProvider>().loadCustomers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CustomerProvider>().loadCustomers();
+    });
   }
 
   @override
@@ -96,8 +98,25 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                         title: Text(customer.displayName),
                         subtitle: Text(
                             '${customer.documentType}: ${customer.documentNumber}'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {},
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, size: 18),
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                '/customers/form',
+                                arguments: customer,
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right),
+                          ],
+                        ),
+                        onTap: () => Navigator.pushNamed(
+                          context,
+                          '/customers/form',
+                          arguments: customer,
+                        ),
                       ),
                     );
                   },

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'config/theme.dart';
+import 'services/db_init.dart';
 import 'providers/auth_provider.dart';
 import 'providers/company_provider.dart';
 import 'providers/customer_provider.dart';
@@ -18,9 +19,11 @@ import 'screens/sales/sales_list_screen.dart';
 import 'screens/sales/new_sale_screen.dart';
 import 'screens/sales/sale_detail_screen.dart';
 import 'screens/reports/reports_screen.dart';
+import 'screens/settings/settings_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  initDatabaseFactory();
   runApp(const FactureApp());
 }
 
@@ -89,6 +92,10 @@ class FactureApp extends StatelessWidget {
             case '/reports':
               return MaterialPageRoute(
                 builder: (_) => const ReportsScreen(),
+              );
+            case '/settings':
+              return MaterialPageRoute(
+                builder: (_) => const SettingsScreen(),
               );
             default:
               if (settings.name?.startsWith('/sales/') ?? false) {

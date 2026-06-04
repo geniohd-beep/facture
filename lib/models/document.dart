@@ -101,6 +101,9 @@ class InvoiceDocument {
   final String? sunatTicket;
   final String? sunatCdr;
   final String? notes;
+  final String taxRegime;
+  final DateTime? deliveryDate;
+  final String deliveryAddress;
 
   InvoiceDocument({
     this.id,
@@ -122,6 +125,9 @@ class InvoiceDocument {
     this.sunatTicket,
     this.sunatCdr,
     this.notes,
+    this.taxRegime = 'GENERAL',
+    this.deliveryDate,
+    this.deliveryAddress = '',
   }) : issueDate = issueDate ?? DateTime.now();
 
   String get documentNumber => '$series-$number';
@@ -130,6 +136,8 @@ class InvoiceDocument {
     switch (status) {
       case 'BORRADOR':
         return 'Borrador';
+      case 'PEDIDO':
+        return 'Pedido';
       case 'EMITIDO':
         return 'Emitido';
       case 'ENVIADO':
@@ -163,6 +171,9 @@ class InvoiceDocument {
         'sunat_ticket': sunatTicket,
         'sunat_cdr': sunatCdr,
         'notes': notes,
+        'tax_regime': taxRegime,
+        'delivery_date': deliveryDate?.toIso8601String(),
+        'delivery_address': deliveryAddress,
       };
 
   factory InvoiceDocument.fromMap(Map<String, dynamic> map) => InvoiceDocument(
@@ -187,6 +198,11 @@ class InvoiceDocument {
         sunatTicket: map['sunat_ticket'],
         sunatCdr: map['sunat_cdr'],
         notes: map['notes'],
+        taxRegime: map['tax_regime'] ?? 'GENERAL',
+        deliveryDate: map['delivery_date'] != null
+            ? DateTime.tryParse(map['delivery_date'])
+            : null,
+        deliveryAddress: map['delivery_address'] ?? '',
       );
 
   InvoiceDocument copyWith({
@@ -209,6 +225,9 @@ class InvoiceDocument {
     String? sunatTicket,
     String? sunatCdr,
     String? notes,
+    String? taxRegime,
+    DateTime? deliveryDate,
+    String? deliveryAddress,
   }) =>
       InvoiceDocument(
         id: id ?? this.id,
@@ -230,5 +249,8 @@ class InvoiceDocument {
         sunatTicket: sunatTicket ?? this.sunatTicket,
         sunatCdr: sunatCdr ?? this.sunatCdr,
         notes: notes ?? this.notes,
+        taxRegime: taxRegime ?? this.taxRegime,
+        deliveryDate: deliveryDate ?? this.deliveryDate,
+        deliveryAddress: deliveryAddress ?? this.deliveryAddress,
       );
 }

@@ -56,14 +56,14 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     if (!mounted) return;
     setState(() => _sending = false);
 
-    if (result['success']) {
+    if (result.isSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message'])),
+        SnackBar(content: Text(result.data?['message'] ?? 'Enviado correctamente')),
       );
       _loadDocument();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message'])),
+        SnackBar(content: Text(result.error ?? 'Error al enviar')),
       );
     }
   }
@@ -183,7 +183,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                   const SizedBox(height: 8),
                   _infoRow('Nombre', doc.customerName),
                   _infoRow(
-                      '${doc.customerDocType}',
+                      doc.customerDocType,
                       doc.customerDocNumber),
                   if (doc.customerAddress.isNotEmpty)
                     _infoRow('Dirección', doc.customerAddress),

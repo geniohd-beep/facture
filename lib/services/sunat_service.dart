@@ -6,21 +6,21 @@ import 'package:printing/printing.dart';
 import '../config/constants.dart';
 import '../models/company.dart';
 import '../models/document.dart';
+import '../utils/api_result.dart';
 
 class SunatService {
   String? _apiToken;
 
-  void configure({
-    String? apiToken,
-    String? rucEmisor,
-  }) {
+  void configure({String? apiToken}) {
     _apiToken = apiToken;
   }
 
-  Future<Map<String, dynamic>> sendDocument(
+  bool get isConfigured => _apiToken != null;
+
+  Future<ApiResult<Map<String, dynamic>>> sendDocument(
       InvoiceDocument document, List<DocumentItem> items, Company company) async {
     if (_apiToken == null) {
-      return {'success': false, 'message': 'API no configurada'};
+      return ApiResult.failure('API SUNAT no configurada');
     }
 
     try {
@@ -62,26 +62,22 @@ class SunatService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return {
-          'success': true,
+        return ApiResult.success({
           'ticket': data['ticket'],
           'cdr': data['cdr'],
           'message': 'Documento enviado correctamente',
-        };
+        });
       }
 
-      return {
-        'success': false,
-        'message': 'Error al enviar: ${response.body}',
-      };
+      return ApiResult.failure('Error al enviar a SUNAT: ${response.statusCode} - ${response.body}');
     } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
+      return ApiResult.failure('Error de conexión con SUNAT: $e');
     }
   }
 
-  Future<Map<String, dynamic>> consultStatus(String ticket) async {
+  Future<ApiResult<Map<String, dynamic>>> consultStatus(String ticket) async {
     if (_apiToken == null) {
-      return {'success': false, 'message': 'API no configurada'};
+      return ApiResult.failure('API SUNAT no configurada');
     }
 
     try {
@@ -95,16 +91,15 @@ class SunatService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return {
-          'success': true,
+        return ApiResult.success({
           'estado': data['estado'],
           'cdr': data['cdr'],
-        };
+        });
       }
 
-      return {'success': false, 'message': 'Error al consultar'};
+      return ApiResult.failure('Error al consultar ticket SUNAT: ${response.statusCode}');
     } catch (e) {
-      return {'success': false, 'message': 'Error de conexión: $e'};
+      return ApiResult.failure('Error de conexión con SUNAT: $e');
     }
   }
 

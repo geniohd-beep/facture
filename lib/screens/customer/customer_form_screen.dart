@@ -22,6 +22,27 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   String _docType = 'DNI';
   bool _isConsulting = false;
   bool _isSaving = false;
+  bool _isEditing = false;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      final args = ModalRoute.of(context)?.settings.arguments as Customer?;
+      if (args != null) {
+        _isEditing = true;
+        _docType = args.documentType;
+        _docNumberController.text = args.documentNumber;
+        _firstNameController.text = args.firstName;
+        _lastNameController.text = args.lastName;
+        _addressController.text = args.address;
+        _phoneController.text = args.phone;
+        _emailController.text = args.email;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -41,24 +62,21 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     setState(() => _isConsulting = true);
 
     final provider = context.read<CustomerProvider>();
-    Customer? customer;
-
-    if (_docType == 'DNI') {
-      customer = await provider.searchByDNI(number);
-    } else {
-      customer = await provider.searchByRUC(number);
-    }
+    final result = _docType == 'DNI'
+        ? await provider.searchByDNI(number)
+        : await provider.searchByRUC(number);
 
     if (!mounted) return;
     setState(() => _isConsulting = false);
 
-    if (customer != null) {
+    if (result.isSuccess && result.data != null) {
+      final customer = result.data!;
       _firstNameController.text = customer.firstName;
       _lastNameController.text = customer.lastName;
       _addressController.text = customer.address;
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se encontraron datos')),
+        SnackBar(content: Text(result.error ?? 'No se encontraron datos')),
       );
     }
   }
@@ -101,7 +119,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nuevo Cliente')),
+      appBar: AppBar(title: Text(_isEditing ? 'Editar Cliente' : 'Nuevo Cliente')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(

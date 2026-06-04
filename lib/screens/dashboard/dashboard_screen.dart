@@ -20,15 +20,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
   }
 
   Future<void> _loadData() async {
     final companyProvider = context.read<CompanyProvider>();
+    final docProvider = context.read<DocumentProvider>();
     await companyProvider.loadCompanies();
 
     if (companyProvider.hasCompany) {
-      final docProvider = context.read<DocumentProvider>();
       final now = DateTime.now();
       final firstOfMonth = DateTime(now.year, now.month, 1);
       _summary = await docProvider.getSalesSummary(
@@ -274,6 +276,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onReports: () {
         Navigator.pop(context);
         Navigator.pushNamed(context, '/reports');
+      },
+      onSettings: () {
+        Navigator.pop(context);
+        Navigator.pushNamed(context, '/settings');
       },
       onLogout: () {
         Navigator.pop(context);
