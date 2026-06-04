@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/product_provider.dart';
 import '../../services/file_util.dart';
 import '../../services/settings_service.dart';
+import '../../services/sync_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -225,6 +226,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.sync,
+                                  color: Theme.of(context).colorScheme.primary),
+                              const SizedBox(width: 8),
+                              Text('Sincronización',
+                                  style: Theme.of(context).textTheme.titleMedium),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Sube y descarga datos desde/hacia la nube',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 12),
+                          _SyncAction(),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   FilledButton.icon(
                     onPressed: _isSaving ? null : _save,
                     icon: _isSaving
@@ -283,5 +311,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+}
+
+class _SyncAction extends StatefulWidget {
+  @override
+  State<_SyncAction> createState() => _SyncActionState();
+}
+
+class _SyncActionState extends State<_SyncAction> {
+  Map<String, dynamic> _status = {};
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    _status = await SyncService.instance.getSyncStatus();
+    if (mounted) setState(() => _loaded = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded) return const SizedBox.shrink();
+
+    final pending = _status['pending'] as Map<String, int>? ?? {};
+    final pendingCount = pending.values.fold(0, (int a, b) => a + b);
+    final lastSync = _status['lastSync'] as String?;
+    final connected = _status['connected'] as bool? ?? false;
+    final syncing = _status['syncing'] as bool? ?? false;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Icon(
+              syncing ? Icons.sync : connected ? Icons.cloud_done : Icons.cloud_off,
+              size: 18,
+              color: syncing ? Colors.blue : connected ? Colors.green : Colors.red,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                syncing ? 'Sincronizando...' : connected ? 'Conectado' : 'Sin conexión',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: syncing ? Colors.blue : connected ? Colors.green : Colors.red,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (lastSync != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Última sync: ${_formatDate(lastSync)}',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ),
+        if (pendingCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '$pendingCount cambio(s) pendiente(s) de subir',
+              style: const TextStyle(fontSize: 11, color: Colors.orange),
+            ),
+          ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: syncing
+                ? null
+                : () => SyncService.instance.sync().then((_) => _refresh()),
+            icon: syncing
+                ? const SizedBox(
+                    width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh, size: 18),
+            label: Text(syncing ? 'Sincronizando...' : 'Forzar sincronización'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day.toString().padLeft(2, '0')}/'
+          '${dt.month.toString().padLeft(2, '0')}/'
+          '${dt.year} ${dt.hour.toString().padLeft(2, '0')}:'
+          '${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
   }
 }
