@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'config/supabase_config.dart';
 import 'config/theme.dart';
 import 'services/db_init.dart';
+import 'services/sync_service.dart';
 import 'models/customer.dart';
 import 'providers/auth_provider.dart';
 import 'providers/company_provider.dart';
@@ -24,9 +27,17 @@ import 'screens/reports/reports_screen.dart';
 import 'screens/reports/api_stats_screen.dart';
 import 'screens/settings/settings_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   initDatabaseFactory();
+
+  await Supabase.initialize(
+    url: SupabaseConfig.supabaseUrl,
+    publishableKey: SupabaseConfig.publishableKey,
+  );
+
+  SyncService.instance.init();
+
   runApp(const FactureApp());
 }
 

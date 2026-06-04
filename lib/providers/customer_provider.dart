@@ -3,6 +3,7 @@ import '../models/customer.dart';
 import '../services/database_service.dart';
 import '../services/reniec_service.dart';
 import '../services/settings_service.dart';
+import '../services/sync_service.dart';
 import '../utils/api_result.dart';
 
 class CustomerProvider extends ChangeNotifier {
@@ -51,6 +52,7 @@ class CustomerProvider extends ChangeNotifier {
       }
       await loadCustomers();
       _lastError = null;
+      SyncService.instance.sync();
       return 'ok';
     } catch (e) {
       _lastError = 'Error al guardar: $e';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/company.dart';
 import '../services/database_service.dart';
+import '../services/sync_service.dart';
 
 class CompanyProvider extends ChangeNotifier {
   final DatabaseService _db = DatabaseService();
@@ -30,6 +31,7 @@ class CompanyProvider extends ChangeNotifier {
         await _db.insertCompany(company);
       }
       await loadCompanies();
+      SyncService.instance.sync();
       return 'ok';
     } catch (e) {
       return 'Error al guardar: $e';

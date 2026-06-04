@@ -7,6 +7,7 @@ import '../models/document.dart';
 import '../models/product.dart';
 import '../services/database_service.dart';
 import '../services/sunat_service.dart';
+import '../services/sync_service.dart';
 import '../utils/api_result.dart';
 
 class DocumentProvider extends ChangeNotifier {
@@ -255,6 +256,15 @@ class DocumentProvider extends ChangeNotifier {
         documentId: docId,
       ));
       await _db.updateProductStock(item.productId, -item.quantity.toInt());
+      await _db.recordKardexFromSale(
+        productId: item.productId,
+        productCode: item.productCode,
+        productName: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        documentNumber: doc.documentNumber,
+        documentType: documentType,
+      );
     }
 
     await _db.updateDocumentSeries(
@@ -263,6 +273,7 @@ class DocumentProvider extends ChangeNotifier {
     await clearSavedCart();
     clearItems();
     await loadDocuments(companyId: company.id);
+    SyncService.instance.sync();
     return null;
   }
 
@@ -326,6 +337,7 @@ class DocumentProvider extends ChangeNotifier {
     }
 
     await loadDocuments(companyId: company.id);
+    SyncService.instance.sync();
     return null;
   }
 
@@ -375,6 +387,7 @@ class DocumentProvider extends ChangeNotifier {
       sentWhatsapp: doc.sentWhatsapp || whatsapp,
       sentEmail: doc.sentEmail || email,
     ));
+    SyncService.instance.sync();
   }
 
   Future<List<InvoiceDocument>> getDocumentsByCustomer({

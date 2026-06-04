@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/database_service.dart';
+import '../services/sync_service.dart';
 
 class ProductProvider extends ChangeNotifier {
   final DatabaseService _db = DatabaseService();
@@ -24,11 +25,31 @@ class ProductProvider extends ChangeNotifier {
   Future<String> saveProduct(Product product) async {
     try {
       if (product.id != null) {
+        final existing = await _db.getProductByCode(product.code);
         await _db.updateProduct(product);
+        if (existing != null && existing.stock != product.stock) {
+          await _db.recordKardexFromAdjustment(
+            productId: product.id!,
+            productCode: product.code,
+            productName: product.name,
+            oldStock: existing.stock,
+            newStock: product.stock,
+          );
+        }
       } else {
-        await _db.insertProduct(product);
+        final newId = await _db.insertProduct(product);
+        if (product.stock > 0) {
+          await _db.recordKardexFromAdjustment(
+            productId: newId,
+            productCode: product.code,
+            productName: product.name,
+            oldStock: 0,
+            newStock: product.stock,
+          );
+        }
       }
       await loadProducts();
+      SyncService.instance.sync();
       return 'ok';
     } catch (e) {
       return 'Error al guardar: $e';

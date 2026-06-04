@@ -9,6 +9,9 @@ import '../models/product.dart';
 import '../models/document.dart';
 import '../models/user.dart';
 import '../models/api_consultation_stats.dart';
+import '../models/kardex_entry.dart';
+
+String _nowUtcIso() => DateTime.now().toUtc().toIso8601String();
 
 class DatabaseService {
   static Database? _database;
@@ -46,12 +49,13 @@ class DatabaseService {
         phone TEXT DEFAULT '',
         email TEXT DEFAULT '',
         logo_path TEXT DEFAULT '',
-        is_active INTEGER DEFAULT 1
+        is_active INTEGER DEFAULT 1,
+        updated_at TEXT NOT NULL
       )
     ''');
-
-    await db.execute('''
-      CREATE TABLE customers (
+ 
+     await db.execute('''
+       CREATE TABLE customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         document_type TEXT NOT NULL,
         document_number TEXT NOT NULL,
@@ -62,12 +66,13 @@ class DatabaseService {
         phone TEXT DEFAULT '',
         email TEXT DEFAULT '',
         from_api INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       )
     ''');
-
-    await db.execute('''
-      CREATE TABLE products (
+ 
+     await db.execute('''
+       CREATE TABLE products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         code TEXT NOT NULL,
         name TEXT NOT NULL,
@@ -77,12 +82,13 @@ class DatabaseService {
         sale_price REAL DEFAULT 0,
         stock INTEGER DEFAULT 0,
         unit_type TEXT DEFAULT 'UNIDAD',
-        is_active INTEGER DEFAULT 1
+        is_active INTEGER DEFAULT 1,
+        updated_at TEXT NOT NULL
       )
     ''');
-
-    await db.execute('''
-      CREATE TABLE documents (
+ 
+     await db.execute('''
+       CREATE TABLE documents (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         company_id INTEGER NOT NULL,
         customer_id INTEGER,
@@ -109,11 +115,12 @@ class DatabaseService {
         notes TEXT,
         tax_regime TEXT DEFAULT 'GENERAL',
         delivery_date TEXT,
-        delivery_address TEXT DEFAULT ''
+        delivery_address TEXT DEFAULT '',
+        updated_at TEXT NOT NULL
       )
     ''');
-
-    await db.execute('''
+ 
+     await db.execute('''
       CREATE TABLE document_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         document_id INTEGER NOT NULL,
@@ -162,11 +169,46 @@ class DatabaseService {
 
     await db.execute(
         'CREATE INDEX idx_customers_doc ON customers(document_type, document_number)');
+    await db.execute('''
+      CREATE TABLE kardex (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        product_code TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        date TEXT NOT NULL,
+        document_type TEXT NOT NULL,
+        document_number TEXT,
+        reference TEXT DEFAULT '',
+        quantity_in REAL DEFAULT 0,
+        quantity_out REAL DEFAULT 0,
+        stock_balance INTEGER DEFAULT 0,
+        unit_price REAL DEFAULT 0,
+        total_value REAL DEFAULT 0
+      )
+    ''');
+
+    await db.execute(
+        'CREATE INDEX idx_kardex_product ON kardex(product_id, date)');
+
+    await db.execute('''
+      CREATE TABLE sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        record_id INTEGER,
+        operation TEXT NOT NULL,
+        data TEXT,
+        created_at TEXT NOT NULL,
+        synced INTEGER DEFAULT 0
+      )
+    ''');
+
     await db.execute(
         'CREATE INDEX idx_documents_date ON documents(issue_date)');
     await db.execute(
         'CREATE INDEX idx_documents_company ON documents(company_id)');
-
+    await db.execute(
+        'CREATE INDEX idx_sync_queue_pending ON sync_queue(synced, created_at)');
+ 
     await db.execute('''
       CREATE TABLE api_consultation_stats (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,21 +252,96 @@ class DatabaseService {
         await db.execute("ALTER TABLE customers ADD COLUMN from_api INTEGER DEFAULT 0");
       } catch (_) {}
     }
+    if (oldVersion < 5) {
+      for (final table in ['companies', 'customers', 'products', 'documents']) {
+        try {
+          await db.execute(
+              "ALTER TABLE $table ADD COLUMN updated_at TEXT DEFAULT ''");
+        } catch (_) {}
+      }
+      try {
+        await db.execute("ALTER TABLE document_items ADD COLUMN updated_at TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE document_series ADD COLUMN updated_at TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE users ADD COLUMN updated_at TEXT DEFAULT ''");
+      } catch (_) {}
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS sync_queue (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          table_name TEXT NOT NULL,
+          record_id INTEGER,
+          operation TEXT NOT NULL,
+          data TEXT,
+          created_at TEXT NOT NULL,
+          synced INTEGER DEFAULT 0
+        )
+      ''');
+      try {
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_sync_queue_pending ON sync_queue(synced, created_at)');
+      } catch (_) {}
+    }
+    if (oldVersion < 6) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS kardex (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          product_id INTEGER NOT NULL,
+          product_code TEXT NOT NULL,
+          product_name TEXT NOT NULL,
+          date TEXT NOT NULL,
+          document_type TEXT NOT NULL,
+          document_number TEXT,
+          reference TEXT DEFAULT '',
+          quantity_in REAL DEFAULT 0,
+          quantity_out REAL DEFAULT 0,
+          stock_balance INTEGER DEFAULT 0,
+          unit_price REAL DEFAULT 0,
+          total_value REAL DEFAULT 0
+        )
+      ''');
+      try {
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_kardex_product ON kardex(product_id, date)');
+      } catch (_) {}
+    }
   }
 
   Future<int> insertCompany(Company company) async {
     final db = await database;
-    return await db.insert('companies', company.toMap());
+    final now = _nowUtcIso();
+    final map = company.toMap();
+    map['updated_at'] = now;
+    final id = await db.insert('companies', map);
+    await addToSyncQueue(
+      tableName: 'companies',
+      recordId: id,
+      operation: 'INSERT',
+      data: {...map, 'id': id},
+    );
+    return id;
   }
 
   Future<int> updateCompany(Company company) async {
     final db = await database;
-    return await db.update(
+    final now = _nowUtcIso();
+    final map = company.toMap();
+    map['updated_at'] = now;
+    final result = await db.update(
       'companies',
-      company.toMap(),
+      map,
       where: 'id = ?',
       whereArgs: [company.id],
     );
+    await addToSyncQueue(
+      tableName: 'companies',
+      recordId: company.id,
+      operation: 'UPDATE',
+      data: map,
+    );
+    return result;
   }
 
   Future<Company?> getCompany(int id) async {
@@ -250,17 +367,37 @@ class DatabaseService {
 
   Future<int> insertCustomer(Customer customer) async {
     final db = await database;
-    return await db.insert('customers', customer.toMap());
+    final now = _nowUtcIso();
+    final map = customer.toMap();
+    map['updated_at'] = now;
+    final id = await db.insert('customers', map);
+    await addToSyncQueue(
+      tableName: 'customers',
+      recordId: id,
+      operation: 'INSERT',
+      data: {...map, 'id': id},
+    );
+    return id;
   }
 
   Future<int> updateCustomer(Customer customer) async {
     final db = await database;
-    return await db.update(
+    final now = _nowUtcIso();
+    final map = customer.toMap();
+    map['updated_at'] = now;
+    final result = await db.update(
       'customers',
-      customer.toMap(),
+      map,
       where: 'id = ?',
       whereArgs: [customer.id],
     );
+    await addToSyncQueue(
+      tableName: 'customers',
+      recordId: customer.id,
+      operation: 'UPDATE',
+      data: map,
+    );
+    return result;
   }
 
   Future<Customer?> getCustomerByDocument(
@@ -296,17 +433,37 @@ class DatabaseService {
 
   Future<int> insertProduct(Product product) async {
     final db = await database;
-    return await db.insert('products', product.toMap());
+    final now = _nowUtcIso();
+    final map = product.toMap();
+    map['updated_at'] = now;
+    final id = await db.insert('products', map);
+    await addToSyncQueue(
+      tableName: 'products',
+      recordId: id,
+      operation: 'INSERT',
+      data: {...map, 'id': id},
+    );
+    return id;
   }
 
   Future<int> updateProduct(Product product) async {
     final db = await database;
-    return await db.update(
+    final now = _nowUtcIso();
+    final map = product.toMap();
+    map['updated_at'] = now;
+    final result = await db.update(
       'products',
-      product.toMap(),
+      map,
       where: 'id = ?',
       whereArgs: [product.id],
     );
+    await addToSyncQueue(
+      tableName: 'products',
+      recordId: product.id,
+      operation: 'UPDATE',
+      data: map,
+    );
+    return result;
   }
 
   Future<List<Product>> searchProducts(String query) async {
@@ -398,22 +555,126 @@ class DatabaseService {
 
   Future<int> insertDocument(InvoiceDocument doc) async {
     final db = await database;
-    return await db.insert('documents', doc.toMap());
+    final now = _nowUtcIso();
+    final map = doc.toMap();
+    map['updated_at'] = now;
+    final id = await db.insert('documents', map);
+    await addToSyncQueue(
+      tableName: 'documents',
+      recordId: id,
+      operation: 'INSERT',
+      data: {...map, 'id': id},
+    );
+    return id;
   }
 
   Future<int> updateDocument(InvoiceDocument doc) async {
     final db = await database;
-    return await db.update(
+    final now = _nowUtcIso();
+    final map = doc.toMap();
+    map['updated_at'] = now;
+    final result = await db.update(
       'documents',
-      doc.toMap(),
+      map,
       where: 'id = ?',
       whereArgs: [doc.id],
     );
+    await addToSyncQueue(
+      tableName: 'documents',
+      recordId: doc.id,
+      operation: 'UPDATE',
+      data: map,
+    );
+    return result;
   }
 
   Future<int> insertDocumentItem(DocumentItem item) async {
     final db = await database;
-    return await db.insert('document_items', item.toMap());
+    final now = _nowUtcIso();
+    final map = item.toMap();
+    map['updated_at'] = now;
+    final id = await db.insert('document_items', map);
+    await addToSyncQueue(
+      tableName: 'document_items',
+      recordId: id,
+      operation: 'INSERT',
+      data: {...map, 'id': id},
+    );
+    return id;
+  }
+
+  Future<void> upsertCustomer(Map<String, dynamic> data) async {
+    final db = await database;
+    final now = _nowUtcIso();
+    data['updated_at'] = now;
+    final existing = await db.query(
+      'customers',
+      where: 'document_type = ? AND document_number = ?',
+      whereArgs: [data['document_type'], data['document_number']],
+    );
+    if (existing.isNotEmpty) {
+      await db.update('customers', data,
+          where: 'id = ?', whereArgs: [existing.first['id']]);
+    } else {
+      await db.insert('customers', data);
+    }
+  }
+
+  Future<void> upsertProduct(Map<String, dynamic> data) async {
+    final db = await database;
+    final now = _nowUtcIso();
+    data['updated_at'] = now;
+    final existing =
+        await db.query('products', where: 'code = ?', whereArgs: [data['code']]);
+    if (existing.isNotEmpty) {
+      data['id'] = existing.first['id'];
+      await db.update('products', data,
+          where: 'id = ?', whereArgs: [existing.first['id']]);
+    } else {
+      data.remove('id');
+      await db.insert('products', data);
+    }
+  }
+
+  Future<void> upsertCompany(Map<String, dynamic> data) async {
+    final db = await database;
+    final now = _nowUtcIso();
+    data['updated_at'] = now;
+    final existing =
+        await db.query('companies', where: 'ruc = ?', whereArgs: [data['ruc']]);
+    if (existing.isNotEmpty) {
+      data['id'] = existing.first['id'];
+      await db.update('companies', data,
+          where: 'id = ?', whereArgs: [existing.first['id']]);
+    } else {
+      data.remove('id');
+      await db.insert('companies', data);
+    }
+  }
+
+  Future<int> upsertDocument(Map<String, dynamic> data) async {
+    final db = await database;
+    final now = _nowUtcIso();
+    data['updated_at'] = now;
+    final existing = await db.query(
+      'documents',
+      where: 'company_id = ? AND document_type = ? AND series = ? AND number = ?',
+      whereArgs: [
+        data['company_id'],
+        data['document_type'],
+        data['series'],
+        data['number']
+      ],
+    );
+    if (existing.isNotEmpty) {
+      data['id'] = existing.first['id'];
+      await db.update('documents', data,
+          where: 'id = ?', whereArgs: [existing.first['id']]);
+      return existing.first['id'] as int;
+    } else {
+      data.remove('id');
+      return await db.insert('documents', data);
+    }
   }
 
   Future<List<DocumentItem>> getDocumentItems(int documentId) async {
@@ -583,10 +844,161 @@ class DatabaseService {
     ''');
   }
 
+  Future<void> insertKardexEntry(KardexEntry entry) async {
+    final db = await database;
+    await db.insert('kardex', entry.toMap());
+  }
+
+  Future<List<KardexEntry>> getKardexByProduct(int productId) async {
+    final db = await database;
+    final maps = await db.query(
+      'kardex',
+      where: 'product_id = ?',
+      whereArgs: [productId],
+      orderBy: 'date ASC, id ASC',
+    );
+    return maps.map((m) => KardexEntry.fromMap(m)).toList();
+  }
+
+  Future<Map<String, dynamic>> getKardexSummary(int productId) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        COALESCE(SUM(quantity_in), 0) as total_in,
+        COALESCE(SUM(quantity_out), 0) as total_out,
+        COALESCE(SUM(total_value), 0) as total_value
+      FROM kardex WHERE product_id = ?
+    ''', [productId]);
+    return result.first;
+  }
+
+  Future<void> recordKardexFromSale({
+    required int productId,
+    required String productCode,
+    required String productName,
+    required double quantity,
+    required double unitPrice,
+    required String documentNumber,
+    required String documentType,
+  }) async {
+    final currentProduct = await getProductByCode(productCode);
+    final currentStock = currentProduct?.stock ?? 0;
+    final entry = KardexEntry(
+      productId: productId,
+      productCode: productCode,
+      productName: productName,
+      documentType: documentType,
+      documentNumber: documentNumber,
+      reference: 'Venta $documentType $documentNumber',
+      quantityOut: quantity,
+      stockBalance: currentStock,
+      unitPrice: unitPrice,
+      totalValue: quantity * unitPrice,
+    );
+    await insertKardexEntry(entry);
+  }
+
+  Future<void> recordKardexFromAdjustment({
+    required int productId,
+    required String productCode,
+    required String productName,
+    required int oldStock,
+    required int newStock,
+  }) async {
+    final now = DateTime.now();
+    final ref = 'Ajuste manual (${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute})';
+    if (newStock > oldStock) {
+      await insertKardexEntry(KardexEntry(
+        productId: productId,
+        productCode: productCode,
+        productName: productName,
+        documentType: 'AJUSTE',
+        reference: ref,
+        quantityIn: (newStock - oldStock).toDouble(),
+        stockBalance: newStock,
+      ));
+    } else if (newStock < oldStock) {
+      await insertKardexEntry(KardexEntry(
+        productId: productId,
+        productCode: productCode,
+        productName: productName,
+        documentType: 'AJUSTE',
+        reference: ref,
+        quantityOut: (oldStock - newStock).toDouble(),
+        stockBalance: newStock,
+      ));
+    }
+  }
+
   Future<void> deleteDatabase() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, AppConstants.dbName);
     await databaseFactory.deleteDatabase(path);
     _database = null;
+  }
+
+  Future<void> addToSyncQueue({
+    required String tableName,
+    int? recordId,
+    required String operation,
+    Map<String, dynamic>? data,
+  }) async {
+    final db = await database;
+    await db.insert('sync_queue', {
+      'table_name': tableName,
+      'record_id': recordId,
+      'operation': operation,
+      'data': data != null ? jsonEncode(data) : null,
+      'created_at': _nowUtcIso(),
+      'synced': 0,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingSyncItems() async {
+    final db = await database;
+    return await db.query('sync_queue',
+        where: 'synced = 0', orderBy: 'created_at ASC', limit: 50);
+  }
+
+  Future<void> markSynced(int syncId) async {
+    final db = await database;
+    await db.update('sync_queue', {'synced': 1},
+        where: 'id = ?', whereArgs: [syncId]);
+  }
+
+  Future<void> markAllSynced() async {
+    final db = await database;
+    await db.update('sync_queue', {'synced': 1}, where: 'synced = 0');
+  }
+
+  Future<List<Map<String, dynamic>>> clearSyncedQueue() async {
+    final db = await database;
+    return await db
+        .rawQuery('DELETE FROM sync_queue WHERE synced = 1 RETURNING *');
+  }
+
+  Future<int> deleteSyncedQueue() async {
+    final db = await database;
+    return await db.delete('sync_queue', where: 'synced = 1');
+  }
+
+  Future<Map<String, int>> countPendingSync() async {
+    final db = await database;
+    final result = await db.rawQuery(
+        'SELECT table_name, COUNT(*) as count FROM sync_queue WHERE synced = 0 GROUP BY table_name');
+    final map = <String, int>{};
+    for (final row in result) {
+      map[row['table_name'] as String] = row['count'] as int;
+    }
+    return map;
+  }
+
+  Future<DateTime?> getLastSyncTime() async {
+    final db = await database;
+    final result = await db.rawQuery(
+        'SELECT MAX(created_at) as last_sync FROM sync_queue WHERE synced = 1');
+    final lastSync = result.first['last_sync'] as String?;
+    if (lastSync == null) return null;
+    return DateTime.tryParse(lastSync);
   }
 }

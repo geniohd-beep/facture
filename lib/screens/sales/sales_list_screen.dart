@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/document_provider.dart';
 import '../../providers/company_provider.dart';
+import '../../services/sync_service.dart';
 import '../../widgets/document_card.dart';
+import '../../widgets/sync_status.dart';
 
 class SalesListScreen extends StatefulWidget {
   const SalesListScreen({super.key});
@@ -38,6 +40,7 @@ class _SalesListScreenState extends State<SalesListScreen> {
       appBar: AppBar(
         title: const Text('Documentos Emitidos'),
         actions: [
+          const SyncStatus(compact: true),
           PopupMenuButton<String>(
             icon: const Icon(Icons.filter_list),
             onSelected: (v) {
@@ -105,19 +108,26 @@ class _SalesListScreenState extends State<SalesListScreen> {
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.only(top: 8, bottom: 80),
-            itemCount: provider.documents.length,
-            itemBuilder: (context, index) {
-              final doc = provider.documents[index];
-              return DocumentCard(
-                document: doc,
-                onTap: () => Navigator.pushNamed(
-                  context,
-                  '/sales/${doc.id}',
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(top: 8),
+                  itemCount: provider.documents.length,
+                  itemBuilder: (context, index) {
+                    final doc = provider.documents[index];
+                    return DocumentCard(
+                      document: doc,
+                      onTap: () => Navigator.pushNamed(
+                        context,
+                        '/sales/${doc.id}',
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+              const SyncStatus(),
+            ],
           );
         },
       ),

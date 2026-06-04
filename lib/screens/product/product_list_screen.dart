@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/product_provider.dart';
 import '../../models/product.dart';
+import '../../services/database_service.dart';
+import '../product/kardex_screen.dart';
 
 class ProductListScreen extends StatefulWidget {
   const ProductListScreen({super.key});
@@ -177,7 +179,31 @@ class _ProductListScreenState extends State<ProductListScreen> {
             ),
           ],
         ),
-        trailing: _stockBadge(product.stock),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.inventory_2, size: 18),
+              tooltip: 'Cardex',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => KardexScreen(product: product),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit, size: 18),
+              tooltip: 'Editar',
+              onPressed: () => Navigator.pushNamed(
+                context,
+                '/products/form',
+                arguments: product,
+              ),
+            ),
+            _stockBadge(product.stock),
+          ],
+        ),
         onTap: () => Navigator.pushNamed(
           context,
           '/products/form',

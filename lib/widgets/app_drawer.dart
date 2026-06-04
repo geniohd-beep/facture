@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'sync_status.dart';
 
 class AppDrawer extends StatelessWidget {
   final String userName;
@@ -110,6 +111,7 @@ class AppDrawer extends StatelessWidget {
             onTap: onSettings,
           ),
           const Spacer(),
+          const SyncStatus(),
           const Divider(),
           _buildMenuItem(
             icon: Icons.logout,
