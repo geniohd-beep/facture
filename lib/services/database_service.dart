@@ -677,6 +677,25 @@ class DatabaseService {
     }
   }
 
+  Future<void> upsertDocumentItem(Map<String, dynamic> data) async {
+    final db = await database;
+    final now = _nowUtcIso();
+    data['updated_at'] = now;
+    final existing = await db.query(
+      'document_items',
+      where: 'document_id = ? AND product_id = ? AND product_code = ?',
+      whereArgs: [data['document_id'], data['product_id'], data['product_code']],
+    );
+    if (existing.isNotEmpty) {
+      data['id'] = existing.first['id'];
+      await db.update('document_items', data,
+          where: 'id = ?', whereArgs: [existing.first['id']]);
+    } else {
+      data.remove('id');
+      await db.insert('document_items', data);
+    }
+  }
+
   Future<List<DocumentItem>> getDocumentItems(int documentId) async {
     final db = await database;
     final maps = await db.query(

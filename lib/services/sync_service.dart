@@ -139,6 +139,9 @@ class SyncService {
     await _pullTable('documents', since, (data) async {
       await _db.upsertDocument(data);
     });
+    await _pullTable('document_items', since, (data) async {
+      await _db.upsertDocumentItem(data);
+    });
   }
 
   Future<void> _pullTable(
@@ -156,7 +159,9 @@ class SyncService {
       for (final row in response) {
         final data = Map<String, dynamic>.from(row);
         data.remove('id');
+        data.remove('local_id');
         data.remove('device_id');
+        data.remove('created_at');
         try {
           await upsertFn(data);
         } catch (_) {}
