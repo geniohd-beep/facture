@@ -10,7 +10,8 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _sunatTokenController = TextEditingController();
-  final _reniecTokenController = TextEditingController();
+  final _apiintiTokenController = TextEditingController();
+  final _jsonpeTokenController = TextEditingController();
   final _settingsService = SettingsService();
   bool _isLoading = true;
   bool _isSaving = false;
@@ -25,11 +26,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadTokens() async {
     final sunatToken = await _settingsService.getSunatToken();
-    final reniecToken = await _settingsService.getReniecToken();
+    final apiintiToken = await _settingsService.getApiintiToken();
+    final jsonpeToken = await _settingsService.getJsonpeToken();
     if (!mounted) return;
     setState(() {
       _sunatTokenController.text = sunatToken ?? '';
-      _reniecTokenController.text = reniecToken ?? '';
+      _apiintiTokenController.text = apiintiToken ?? '';
+      _jsonpeTokenController.text = jsonpeToken ?? '';
       _isLoading = false;
     });
   }
@@ -38,7 +41,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isSaving = true);
 
     await _settingsService.setSunatToken(_sunatTokenController.text.trim());
-    await _settingsService.setReniecToken(_reniecTokenController.text.trim());
+    await _settingsService.setApiintiToken(_apiintiTokenController.text.trim());
+    await _settingsService.setJsonpeToken(_jsonpeTokenController.text.trim());
 
     if (!mounted) return;
     setState(() => _isSaving = false);
@@ -51,7 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _sunatTokenController.dispose();
-    _reniecTokenController.dispose();
+    _apiintiTokenController.dispose();
+    _jsonpeTokenController.dispose();
     super.dispose();
   }
 
@@ -74,10 +79,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.cloud, color: Theme.of(context).colorScheme.primary),
+                              Icon(Icons.cloud,
+                                  color: Theme.of(context).colorScheme.primary),
                               const SizedBox(width: 8),
                               Text('API SUNAT',
-                                  style: Theme.of(context).textTheme.titleMedium),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium),
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -99,32 +107,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  _buildApiCard(
+                    icon: Icons.person_search,
+                    title: 'API Inti',
+                    description:
+                        'Consulta DNI y RUC (apiinti.dev) — Se intenta primero',
+                    controller: _apiintiTokenController,
+                    label: 'Token API Inti',
+                    hint: 'Ingrese su API Key de apiinti.dev',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildApiCard(
+                    icon: Icons.alternate_email,
+                    title: 'json.pe',
+                    description:
+                        'Alternativa para consulta DNI y RUC (json.pe)',
+                    controller: _jsonpeTokenController,
+                    label: 'Token json.pe',
+                    hint: 'Ingrese su token de json.pe',
+                  ),
+                  const SizedBox(height: 12),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Row(
-                            children: [
-                              Icon(Icons.person_search, color: Theme.of(context).colorScheme.primary),
-                              const SizedBox(width: 8),
-                              Text('API RENIEC / SUNAT',
-                                  style: Theme.of(context).textTheme.titleMedium),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Token para consultar DNI y RUC automáticamente',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _reniecTokenController,
-                            decoration: const InputDecoration(
-                              labelText: 'Token RENIEC/SUNAT',
-                              hintText: 'Ingrese el token de API',
-                              border: OutlineInputBorder(),
+                          Icon(Icons.public,
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('GraphPeru',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'API gratuita sin token (graphperu.daustinn.com) — Última opción',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -141,11 +165,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.save),
-                    label: Text(_isSaving ? 'Guardando...' : 'Guardar Configuración'),
+                    label: Text(
+                        _isSaving ? 'Guardando...' : 'Guardar Configuración'),
                   ),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildApiCard({
+    required IconData icon,
+    required String title,
+    required String description,
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(title,
+                    style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: label,
+                hintText: hint,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

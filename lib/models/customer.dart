@@ -8,6 +8,7 @@ class Customer {
   final String address;
   final String phone;
   final String email;
+  final bool fromApi;
   final DateTime createdAt;
 
   Customer({
@@ -20,6 +21,7 @@ class Customer {
     this.address = '',
     this.phone = '',
     this.email = '',
+    this.fromApi = false,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -36,6 +38,7 @@ class Customer {
         'address': address,
         'phone': phone,
         'email': email,
+        'from_api': fromApi ? 1 : 0,
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -49,6 +52,7 @@ class Customer {
         address: map['address'] ?? '',
         phone: map['phone'] ?? '',
         email: map['email'] ?? '',
+        fromApi: map['from_api'] == 1,
         createdAt: map['created_at'] != null
             ? DateTime.parse(map['created_at'])
             : DateTime.now(),
@@ -64,6 +68,7 @@ class Customer {
     String? address,
     String? phone,
     String? email,
+    bool? fromApi,
   }) =>
       Customer(
         id: id ?? this.id,
@@ -75,6 +80,7 @@ class Customer {
         address: address ?? this.address,
         phone: phone ?? this.phone,
         email: email ?? this.email,
+        fromApi: fromApi ?? this.fromApi,
         createdAt: createdAt,
       );
 }

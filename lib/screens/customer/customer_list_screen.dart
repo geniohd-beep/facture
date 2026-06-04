@@ -39,11 +39,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Buscar por nombre o documento...',
+                hintText: 'Buscar por DNI, RUC o nombre...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
@@ -96,11 +96,52 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                           ),
                         ),
                         title: Text(customer.displayName),
-                        subtitle: Text(
-                            '${customer.documentType}: ${customer.documentNumber}'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                                '${customer.documentType}: ${customer.documentNumber}'),
+                            Row(
+                              children: [
+                                if (customer.phone.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 12),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.phone, size: 12),
+                                        const SizedBox(width: 2),
+                                        Text(customer.phone,
+                                            style: const TextStyle(fontSize: 12)),
+                                      ],
+                                    ),
+                                  ),
+                                if (customer.email.isNotEmpty)
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.email, size: 12),
+                                      const SizedBox(width: 2),
+                                      Text(customer.email,
+                                          style: const TextStyle(fontSize: 12)),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            IconButton(
+                              icon: const Icon(Icons.receipt, size: 18),
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                '/customers/history',
+                                arguments: customer,
+                              ),
+                              tooltip: 'Historial de compras',
+                            ),
                             IconButton(
                               icon: const Icon(Icons.edit, size: 18),
                               onPressed: () => Navigator.pushNamed(

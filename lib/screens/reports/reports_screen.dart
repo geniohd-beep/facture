@@ -19,6 +19,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   DateTime _fromDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _toDate = DateTime.now();
   Map<String, double> _summary = {};
+  List<Map<String, dynamic>> _typeTotals = [];
   List<InvoiceDocument> _recentDocs = [];
   bool _loading = false;
 
@@ -38,6 +39,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     if (company != null) {
       _summary = await docProvider.getSalesSummary(
+          company.id!, _fromDate, _toDate);
+
+      _typeTotals = await docProvider.getSalesSummaryByType(
           company.id!, _fromDate, _toDate);
 
       await docProvider.loadDocuments(
@@ -109,8 +113,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 6),
                 pw.Text('Total Documentos: ${(_summary['total_docs'] ?? 0).toInt()}'),
-                pw.Text('Facturas: ${currencyFormat.format(_summary['total_facturas'] ?? 0)}'),
-                pw.Text('Boletas: ${currencyFormat.format(_summary['total_boletas'] ?? 0)}'),
+                ..._typeTotals.map((row) => pw.Text(
+                      '${row['document_type']}: ${currencyFormat.format((row['total'] as num).toDouble())} (${row['count']} docs)',
+                    )),
               ],
             ),
           ),
@@ -224,23 +229,57 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildStat(
-                            'Facturas',
-                            currencyFormat.format(_summary['total_facturas'] ?? 0),
-                            Colors.indigo),
-                        _buildStat(
-                            'Boletas',
-                            currencyFormat.format(_summary['total_boletas'] ?? 0),
-                            Colors.teal),
-                        _buildStat(
-                            'Documentos',
-                            '${(_summary['total_docs'] ?? 0).toInt()}',
-                            Colors.blue),
-                      ],
-                    ),
+                    ..._typeTotals.map((row) {
+                      final type = row['document_type'] as String;
+                      final count = row['count'] as int;
+                      final total = (row['total'] as num).toDouble();
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Icon(
+                              type == 'Factura Electrónica'
+                                  ? Icons.receipt_long
+                                  : type == 'Boleta Electrónica'
+                                      ? Icons.receipt
+                                      : type == 'Nota de Venta'
+                                          ? Icons.shopping_cart
+                                          : type == 'Pedido'
+                                              ? Icons.assignment
+                                              : Icons.description,
+                              size: 18,
+                              color: type == 'Factura Electrónica'
+                                  ? Colors.indigo
+                                  : type == 'Boleta Electrónica'
+                                      ? Colors.teal
+                                      : type == 'Nota de Venta'
+                                          ? Colors.orange
+                                          : type == 'Pedido'
+                                              ? Colors.purple
+                                              : Colors.grey,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(type,
+                                  style: const TextStyle(fontSize: 13)),
+                            ),
+                            Text('$count docs',
+                                style: const TextStyle(fontSize: 12)),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 100,
+                              child: Text(
+                                currencyFormat.format(total),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const Divider(height: 24),
                   ],
                 ),
               ),
@@ -275,12 +314,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                   ? Colors.indigo
                                   : doc.documentType == 'Boleta Electrónica'
                                       ? Colors.teal
-                                      : Colors.grey,
+                                      : doc.documentType == 'Nota de Venta'
+                                          ? Colors.orange
+                                          : doc.documentType == 'Pedido'
+                                              ? Colors.purple
+                                              : Colors.grey,
                             ),
                             title: Text('${doc.documentType} ${doc.documentNumber}',
                                 style: const TextStyle(fontSize: 13)),
-                            subtitle: Text(doc.customerName,
-                                style: const TextStyle(fontSize: 11)),
+                            subtitle: Row(
+                              children: [
+                                Text(doc.customerName,
+                                    style: const TextStyle(fontSize: 11)),
+                                const SizedBox(width: 8),
+                                _sendStatusBadge(doc),
+                              ],
+                            ),
                             trailing: Text(
                               'S/ ${doc.total.toStringAsFixed(2)}',
                               style: const TextStyle(fontWeight: FontWeight.bold),
@@ -307,15 +356,39 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _buildStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(value,
-            style: TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 16, color: color)),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 12)),
-      ],
+  Widget _sendStatusBadge(InvoiceDocument doc) {
+    final sent = doc.sentWhatsapp || doc.sentEmail;
+    final isSunat = doc.documentType == 'Factura Electrónica' ||
+        doc.documentType == 'Boleta Electrónica';
+    final sunatOk = doc.status == 'ACEPTADO' || doc.status == 'ENVIADO';
+
+    Color color;
+    String label;
+
+    if (sent) {
+      color = Colors.green;
+      label = 'Cliente ✓';
+    } else if (isSunat && sunatOk) {
+      color = Colors.blue;
+      label = 'SUNAT ✓';
+    } else if (doc.status == 'BORRADOR' || doc.status == 'PEDIDO') {
+      color = Colors.amber.shade700;
+      label = 'Interno';
+    } else {
+      color = Colors.red;
+      label = 'Pendiente';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w500),
+      ),
     );
   }
 }

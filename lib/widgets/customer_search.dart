@@ -30,44 +30,49 @@ class DocumentNumberField extends StatelessWidget {
   final String? docType;
   final TextEditingController controller;
   final bool isLoading;
-  final VoidCallback onConsult;
+  final VoidCallback? onConsult;
+  final bool readOnly;
 
   const DocumentNumberField({
     super.key,
     required this.docType,
     required this.controller,
     this.isLoading = false,
-    required this.onConsult,
+    this.onConsult,
+    this.readOnly = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      readOnly: readOnly,
       decoration: InputDecoration(
         labelText: 'N° Documento',
-        suffixIcon: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isLoading)
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else
-              IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: docType != null && controller.text.length >= 8
-                    ? onConsult
-                    : null,
-                tooltip: 'Consultar RENIEC/SUNAT',
+        suffixIcon: readOnly
+            ? null
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  else
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed: docType != null && controller.text.length >= 8
+                          ? onConsult
+                          : null,
+                      tooltip: 'Consultar RENIEC/SUNAT',
+                    ),
+                ],
               ),
-          ],
-        ),
       ),
       keyboardType: TextInputType.number,
       inputFormatters: [

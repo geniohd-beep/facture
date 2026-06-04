@@ -8,6 +8,7 @@ import '../models/customer.dart';
 import '../models/product.dart';
 import '../models/document.dart';
 import '../models/user.dart';
+import '../models/api_consultation_stats.dart';
 
 class DatabaseService {
   static Database? _database;
@@ -60,6 +61,7 @@ class DatabaseService {
         address TEXT DEFAULT '',
         phone TEXT DEFAULT '',
         email TEXT DEFAULT '',
+        from_api INTEGER DEFAULT 0,
         created_at TEXT NOT NULL
       )
     ''');
@@ -91,11 +93,16 @@ class DatabaseService {
         customer_doc_number TEXT NOT NULL,
         customer_name TEXT NOT NULL,
         customer_address TEXT DEFAULT '',
+        customer_phone TEXT DEFAULT '',
+        customer_email TEXT DEFAULT '',
+        sent_whatsapp INTEGER DEFAULT 0,
+        sent_email INTEGER DEFAULT 0,
         issue_date TEXT NOT NULL,
         subtotal REAL DEFAULT 0,
         igv REAL DEFAULT 0,
         total REAL DEFAULT 0,
         payment_method TEXT DEFAULT 'Efectivo',
+        payment_status TEXT DEFAULT 'TOTAL',
         status TEXT DEFAULT 'EMITIDO',
         sunat_ticket TEXT,
         sunat_cdr TEXT,
@@ -159,6 +166,17 @@ class DatabaseService {
         'CREATE INDEX idx_documents_date ON documents(issue_date)');
     await db.execute(
         'CREATE INDEX idx_documents_company ON documents(company_id)');
+
+    await db.execute('''
+      CREATE TABLE api_consultation_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider TEXT NOT NULL,
+        document_type TEXT NOT NULL,
+        document_number TEXT NOT NULL,
+        success INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -168,6 +186,29 @@ class DatabaseService {
       await db.execute("ALTER TABLE documents ADD COLUMN delivery_date TEXT");
       await db.execute(
           "ALTER TABLE documents ADD COLUMN delivery_address TEXT DEFAULT ''");
+    }
+    if (oldVersion < 3) {
+      await db.execute(
+          "ALTER TABLE documents ADD COLUMN payment_status TEXT DEFAULT 'TOTAL'");
+    }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE api_consultation_stats (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          provider TEXT NOT NULL,
+          document_type TEXT NOT NULL,
+          document_number TEXT NOT NULL,
+          success INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL
+        )
+      ''');
+      try {
+        await db.execute("ALTER TABLE documents ADD COLUMN customer_phone TEXT DEFAULT ''");
+        await db.execute("ALTER TABLE documents ADD COLUMN customer_email TEXT DEFAULT ''");
+        await db.execute("ALTER TABLE documents ADD COLUMN sent_whatsapp INTEGER DEFAULT 0");
+        await db.execute("ALTER TABLE documents ADD COLUMN sent_email INTEGER DEFAULT 0");
+        await db.execute("ALTER TABLE customers ADD COLUMN from_api INTEGER DEFAULT 0");
+      } catch (_) {}
     }
   }
 
@@ -287,6 +328,14 @@ class DatabaseService {
     return maps.map((m) => Product.fromMap(m)).toList();
   }
 
+  Future<void> updateProductStock(int productId, int delta) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE products SET stock = MAX(0, stock + ?) WHERE id = ?',
+      [delta, productId],
+    );
+  }
+
   Future<Product?> getProductByCode(String code) async {
     final db = await database;
     final maps =
@@ -364,12 +413,19 @@ class DatabaseService {
     return maps.map((m) => DocumentItem.fromMap(m)).toList();
   }
 
+  Future<void> deleteDocumentItems(int documentId) async {
+    final db = await database;
+    await db.delete('document_items',
+        where: 'document_id = ?', whereArgs: [documentId]);
+  }
+
   Future<List<InvoiceDocument>> getDocuments({
     String? docType,
     String? status,
     DateTime? from,
     DateTime? to,
     int? companyId,
+    int? customerId,
   }) async {
     final db = await database;
     final conditions = <String>[];
@@ -394,6 +450,10 @@ class DatabaseService {
     if (companyId != null) {
       conditions.add('company_id = ?');
       args.add(companyId);
+    }
+    if (customerId != null) {
+      conditions.add('customer_id = ?');
+      args.add(customerId);
     }
 
     final where = conditions.isNotEmpty ? conditions.join(' AND ') : null;
@@ -422,6 +482,24 @@ class DatabaseService {
     final maxNum = map.first['max_num'];
     if (maxNum == null) return 1;
     return (maxNum as int) + 1;
+  }
+
+  Future<List<Map<String, dynamic>>> getSalesSummaryByType(
+      int companyId, DateTime from, DateTime to) async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT 
+        document_type,
+        COUNT(*) as count,
+        COALESCE(SUM(total), 0) as total
+      FROM documents 
+      WHERE company_id = ? 
+        AND issue_date >= ? 
+        AND issue_date <= ?
+        AND status NOT IN ('BORRADOR', 'RECHAZADO')
+      GROUP BY document_type
+      ORDER BY total DESC
+    ''', [companyId, from.toIso8601String(), to.toIso8601String()]);
   }
 
   Future<Map<String, double>> getSalesSummary(
@@ -470,6 +548,26 @@ class DatabaseService {
     );
     if (maps.isEmpty) return null;
     return AppUser.fromMap(maps.first);
+  }
+
+  Future<void> insertConsultationStats(ApiConsultationStats stats) async {
+    final db = await database;
+    await db.insert('api_consultation_stats', stats.toMap());
+  }
+
+  Future<List<Map<String, dynamic>>> getConsultationStatsSummary() async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT 
+        provider,
+        document_type,
+        COUNT(*) as total,
+        SUM(success) as success_count,
+        COUNT(*) - SUM(success) as failure_count
+      FROM api_consultation_stats
+      GROUP BY provider, document_type
+      ORDER BY total DESC
+    ''');
   }
 
   Future<void> deleteDatabase() async {

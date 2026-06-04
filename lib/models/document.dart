@@ -92,11 +92,16 @@ class InvoiceDocument {
   final String customerDocNumber;
   final String customerName;
   final String customerAddress;
+  final String customerPhone;
+  final String customerEmail;
+  final bool sentWhatsapp;
+  final bool sentEmail;
   final DateTime issueDate;
   final double subtotal;
   final double igv;
   final double total;
   final String paymentMethod;
+  final String paymentStatus;
   final String status;
   final String? sunatTicket;
   final String? sunatCdr;
@@ -116,11 +121,16 @@ class InvoiceDocument {
     required this.customerDocNumber,
     required this.customerName,
     this.customerAddress = '',
+    this.customerPhone = '',
+    this.customerEmail = '',
+    this.sentWhatsapp = false,
+    this.sentEmail = false,
     DateTime? issueDate,
     this.subtotal = 0,
     this.igv = 0,
     this.total = 0,
     this.paymentMethod = 'Efectivo',
+    this.paymentStatus = 'TOTAL',
     this.status = 'EMITIDO',
     this.sunatTicket,
     this.sunatCdr,
@@ -162,11 +172,16 @@ class InvoiceDocument {
         'customer_doc_number': customerDocNumber,
         'customer_name': customerName,
         'customer_address': customerAddress,
+        'customer_phone': customerPhone,
+        'customer_email': customerEmail,
+        'sent_whatsapp': sentWhatsapp ? 1 : 0,
+        'sent_email': sentEmail ? 1 : 0,
         'issue_date': issueDate.toIso8601String(),
         'subtotal': subtotal,
         'igv': igv,
         'total': total,
         'payment_method': paymentMethod,
+        'payment_status': paymentStatus,
         'status': status,
         'sunat_ticket': sunatTicket,
         'sunat_cdr': sunatCdr,
@@ -187,6 +202,10 @@ class InvoiceDocument {
         customerDocNumber: map['customer_doc_number'],
         customerName: map['customer_name'],
         customerAddress: map['customer_address'] ?? '',
+        customerPhone: map['customer_phone'] ?? '',
+        customerEmail: map['customer_email'] ?? '',
+        sentWhatsapp: map['sent_whatsapp'] == 1,
+        sentEmail: map['sent_email'] == 1,
         issueDate: map['issue_date'] != null
             ? DateTime.parse(map['issue_date'])
             : DateTime.now(),
@@ -194,6 +213,7 @@ class InvoiceDocument {
         igv: (map['igv'] ?? 0).toDouble(),
         total: (map['total'] ?? 0).toDouble(),
         paymentMethod: map['payment_method'] ?? 'Efectivo',
+        paymentStatus: map['payment_status'] ?? 'TOTAL',
         status: map['status'] ?? 'EMITIDO',
         sunatTicket: map['sunat_ticket'],
         sunatCdr: map['sunat_cdr'],
@@ -216,11 +236,16 @@ class InvoiceDocument {
     String? customerDocNumber,
     String? customerName,
     String? customerAddress,
+    String? customerPhone,
+    String? customerEmail,
+    bool? sentWhatsapp,
+    bool? sentEmail,
     DateTime? issueDate,
     double? subtotal,
     double? igv,
     double? total,
     String? paymentMethod,
+    String? paymentStatus,
     String? status,
     String? sunatTicket,
     String? sunatCdr,
@@ -240,11 +265,16 @@ class InvoiceDocument {
         customerDocNumber: customerDocNumber ?? this.customerDocNumber,
         customerName: customerName ?? this.customerName,
         customerAddress: customerAddress ?? this.customerAddress,
+        customerPhone: customerPhone ?? this.customerPhone,
+        customerEmail: customerEmail ?? this.customerEmail,
+        sentWhatsapp: sentWhatsapp ?? this.sentWhatsapp,
+        sentEmail: sentEmail ?? this.sentEmail,
         issueDate: issueDate ?? this.issueDate,
         subtotal: subtotal ?? this.subtotal,
         igv: igv ?? this.igv,
         total: total ?? this.total,
         paymentMethod: paymentMethod ?? this.paymentMethod,
+        paymentStatus: paymentStatus ?? this.paymentStatus,
         status: status ?? this.status,
         sunatTicket: sunatTicket ?? this.sunatTicket,
         sunatCdr: sunatCdr ?? this.sunatCdr,

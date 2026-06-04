@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/document_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../models/document.dart';
@@ -68,6 +69,89 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     }
   }
 
+  Future<void> _sendWhatsApp() async {
+    if (_document == null) return;
+    final phone = _document!.customerPhone;
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cliente no tiene teléfono registrado')),
+      );
+      return;
+    }
+    final company = context.read<CompanyProvider>().currentCompany;
+    final msg = Uri.encodeComponent(
+      'Gracias por su compra en ${company?.businessName ?? "nuestra empresa"}.\n'
+      '${_document!.documentType}: ${_document!.documentNumber}\n'
+      'Total: S/ ${_document!.total.toStringAsFixed(2)}\n'
+      '¡Gracias por su preferencia!',
+    );
+    final uri = Uri.parse('https://wa.me/$phone?text=$msg');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!mounted) return;
+      await context.read<DocumentProvider>().markDocumentSent(
+            _document!.id!,
+            whatsapp: true,
+            email: false,
+          );
+      _loadDocument();
+      _showThankYou('WhatsApp');
+    }
+  }
+
+  Future<void> _sendEmail() async {
+    if (_document == null) return;
+    final email = _document!.customerEmail;
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cliente no tiene email registrado')),
+      );
+      return;
+    }
+    final company = context.read<CompanyProvider>().currentCompany;
+    final subject = Uri.encodeComponent(
+      '${_document!.documentType} - ${_document!.documentNumber}',
+    );
+    final body = Uri.encodeComponent(
+      'Estimado(a) cliente,\n\n'
+      'Gracias por su compra en ${company?.businessName ?? "nuestra empresa"}.\n\n'
+      '${_document!.documentType}: ${_document!.documentNumber}\n'
+      'Total: S/ ${_document!.total.toStringAsFixed(2)}\n\n'
+      '¡Gracias por su preferencia!',
+    );
+    final uri = Uri.parse('mailto:$email?subject=$subject&body=$body');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!mounted) return;
+      await context.read<DocumentProvider>().markDocumentSent(
+            _document!.id!,
+            whatsapp: false,
+            email: true,
+          );
+      _loadDocument();
+      _showThankYou('correo electrónico');
+    }
+  }
+
+  void _showThankYou(String via) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Comprobante Enviado'),
+        content: Text(
+          'El comprobante ha sido enviado por $via.\n\n'
+          '¡Gracias por su preferencia!',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _printDocument() async {
     if (_document == null) return;
 
@@ -120,6 +204,28 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
             icon: const Icon(Icons.print),
             onPressed: _printDocument,
             tooltip: 'Imprimir/PDF',
+          ),
+          if (doc.customerPhone.isNotEmpty)
+            IconButton(
+              icon: Icon(Icons.chat,
+                  color: doc.sentWhatsapp ? Colors.green : null),
+              onPressed: _sendWhatsApp,
+              tooltip: 'Enviar por WhatsApp',
+            ),
+          if (doc.customerEmail.isNotEmpty)
+            IconButton(
+              icon: Icon(Icons.email,
+                  color: doc.sentEmail ? Colors.green : null),
+              onPressed: _sendEmail,
+              tooltip: 'Enviar por Email',
+            ),
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () => Navigator.pushReplacementNamed(
+              context,
+              '/sales/edit/${doc.id}',
+            ),
+            tooltip: 'Editar',
           ),
         ],
       ),
@@ -187,6 +293,28 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                       doc.customerDocNumber),
                   if (doc.customerAddress.isNotEmpty)
                     _infoRow('Dirección', doc.customerAddress),
+                  if (doc.customerPhone.isNotEmpty)
+                    _infoRow('Teléfono', doc.customerPhone),
+                  if (doc.customerEmail.isNotEmpty)
+                    _infoRow('Email', doc.customerEmail),
+                  if (doc.sentWhatsapp || doc.sentEmail)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle,
+                              size: 14, color: Colors.green.shade600),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Comprobante enviado${doc.sentWhatsapp ? ' (WhatsApp)' : ''}${doc.sentEmail ? ' (Email)' : ''}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),

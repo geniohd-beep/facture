@@ -6,23 +6,27 @@ import '../../providers/customer_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../models/customer.dart';
 import '../../models/product.dart';
+import '../../models/document.dart';
 
 class NewSaleScreen extends StatefulWidget {
-  const NewSaleScreen({super.key});
+  final InvoiceDocument? document;
+
+  const NewSaleScreen({super.key, this.document});
 
   @override
   State<NewSaleScreen> createState() => _NewSaleScreenState();
 }
 
 class _NewSaleScreenState extends State<NewSaleScreen> {
-  final _productSearchController = TextEditingController();
   final _seriesController = TextEditingController(text: 'NV001');
   final _notesController = TextEditingController();
   final _deliveryAddressController = TextEditingController();
   String _documentType = 'Nota de Venta';
   String _paymentMethod = 'Efectivo';
+  String _paymentStatus = 'TOTAL';
   String _taxRegime = 'GENERAL';
   DateTime? _deliveryDate;
+  bool _isEditing = false;
 
   static const _documentTypes = [
     'Nota de Venta',
@@ -37,12 +41,76 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CustomerProvider>().loadCustomers();
       context.read<ProductProvider>().loadProducts();
+      if (widget.document != null) {
+        _loadDocumentForEditing(widget.document!);
+      } else {
+        _checkSavedCart();
+      }
     });
+  }
+
+  Future<void> _loadDocumentForEditing(InvoiceDocument doc) async {
+    _isEditing = true;
+    _documentType = doc.documentType;
+    _seriesController.text = doc.series;
+    _paymentMethod = doc.paymentMethod;
+    _paymentStatus = doc.paymentStatus;
+    _taxRegime = doc.taxRegime;
+    _deliveryDate = doc.deliveryDate;
+    _deliveryAddressController.text = doc.deliveryAddress;
+    if (doc.notes != null) _notesController.text = doc.notes!;
+
+    final docProv = context.read<DocumentProvider>();
+    docProv.selectCustomer(Customer(
+      documentType: doc.customerDocType,
+      documentNumber: doc.customerDocNumber,
+      firstName: doc.customerName,
+      fullName: doc.customerName,
+      address: doc.customerAddress,
+      phone: doc.customerPhone,
+      email: doc.customerEmail,
+    ));
+    await docProv.loadItemsForEdit(doc.id!);
+    setState(() {});
+  }
+
+  Future<void> _checkSavedCart() async {
+    final docProv = context.read<DocumentProvider>();
+    final hasCart = await docProv.hasSavedCart;
+    if (!hasCart) return;
+    if (!mounted) return;
+
+    final restore = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Carrito guardado'),
+        content: const Text('Tiene un carrito con productos guardados de una sesión anterior. ¿Desea restaurarlo?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Descartar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restaurar'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    if (restore == true) {
+      await docProv.restoreCart();
+    } else {
+      await docProv.clearSavedCart();
+    }
   }
 
   @override
   void dispose() {
-    _productSearchController.dispose();
+    if (mounted) {
+      context.read<DocumentProvider>().saveCart();
+    }
     _seriesController.dispose();
     _notesController.dispose();
     _deliveryAddressController.dispose();
@@ -71,6 +139,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       builder: (ctx) => _CustomerSearchSheet(
         onSelected: (customer) {
           context.read<DocumentProvider>().selectCustomer(customer);
+          _autoFillNotes(customer);
           Navigator.pop(ctx);
         },
         onNewCustomer: () {
@@ -79,6 +148,21 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         },
       ),
     );
+  }
+
+  void _autoFillNotes(Customer customer) {
+    final name = (customer.fullName.isNotEmpty
+            ? customer.fullName
+            : '${customer.firstName} ${customer.lastName}')
+        .trim();
+    final parts = name.split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.length >= 2) {
+      final firstName = parts[0];
+      final lastNameInitials = parts.skip(1).map((p) => p[0].toUpperCase()).join('');
+      _notesController.text = '$firstName $lastNameInitials';
+    } else {
+      _notesController.text = name;
+    }
   }
 
   void _addProduct(BuildContext context) {
@@ -94,36 +178,154 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     );
   }
 
-  void _showQuantityDialog(BuildContext context, Product product) {
-    final quantityController = TextEditingController(text: '1');
+  void _showQuantityDialog(BuildContext context, Product product, {double initialQty = 1}) {
+    double qty = initialQty;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(product.name),
-        content: TextField(
-          controller: quantityController,
-          decoration: const InputDecoration(labelText: 'Cantidad'),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          autofocus: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(product.name),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Stock disponible: ${product.stock}',
+                  style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 150,
+                child: ListWheelScrollView(
+                  itemExtent: 40,
+                  diameterRatio: 2,
+                  useMagnifier: true,
+                  offAxisFraction: 0,
+                  onSelectedItemChanged: (i) {
+                    setDialogState(() => qty = (i + 1).toDouble());
+                  },
+                  controller: FixedExtentScrollController(initialItem: qty.round() - 1),
+                  children: List.generate(100, (i) {
+                    final val = i + 1;
+                    return Center(
+                      child: Text(
+                        val.toString(),
+                        style: TextStyle(
+                          fontSize: val == qty.round() ? 24 : 16,
+                          fontWeight: val == qty.round() ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                context.read<DocumentProvider>().addItem(product, qty, taxRegime: _taxRegime);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Agregar'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
+      ),
+    );
+  }
+
+  void _editItemQuantity(BuildContext context, int index, DocumentItem item) {
+    double qty = item.quantity;
+    final docProv = context.read<DocumentProvider>();
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(item.productName),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Desliza para cambiar cantidad',
+                  style: TextStyle(fontSize: 12)),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 150,
+                child: ListWheelScrollView(
+                  itemExtent: 40,
+                  diameterRatio: 2,
+                  useMagnifier: true,
+                  offAxisFraction: 0,
+                  onSelectedItemChanged: (i) {
+                    setDialogState(() => qty = (i + 1).toDouble());
+                  },
+                  controller: FixedExtentScrollController(initialItem: qty.round() - 1),
+                  children: List.generate(100, (i) {
+                    final val = i + 1;
+                    return Center(
+                      child: Text(
+                        val.toString(),
+                        style: TextStyle(
+                          fontSize: val == qty.round() ? 24 : 16,
+                          fontWeight: val == qty.round() ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () {
-              final qty = double.tryParse(quantityController.text) ?? 1;
-              if (qty > 0) {
-                context
-                    .read<DocumentProvider>()
-                    .addItem(product, qty, taxRegime: _taxRegime);
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Agregar'),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: qty == 0
+                  ? null
+                  : () {
+                      showDialog(
+                        context: ctx,
+                        builder: (ctx2) => AlertDialog(
+                          title: const Text('Eliminar producto'),
+                          content: Text(
+                              '¿Eliminar "${item.productName}" de la lista?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx2),
+                              child: const Text('Cancelar'),
+                            ),
+                            FilledButton(
+                              onPressed: () {
+                                docProv.removeItem(index);
+                                Navigator.pop(ctx2);
+                                Navigator.pop(ctx);
+                              },
+                              style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.red),
+                              child: const Text('Eliminar'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+              child: const Text('Eliminar'),
+            ),
+            FilledButton(
+              onPressed: qty > 0
+                  ? () {
+                      context
+                          .read<DocumentProvider>()
+                          .updateItemQuantity(index, qty, taxRegime: _taxRegime);
+                      Navigator.pop(ctx);
+                    }
+                  : null,
+              child: Text(qty > 0 ? 'Actualizar' : ''),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -173,24 +375,59 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       return;
     }
 
-    final doc = await docProvider.createDocument(
-      company: companyProvider.currentCompany!,
-      documentType: _documentType,
-      series: _seriesController.text,
-      paymentMethod: _paymentMethod,
-      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
-      taxRegime: _taxRegime,
-      deliveryDate: _deliveryDate,
-      deliveryAddress: _deliveryAddressController.text.trim(),
-    );
+    late String? error;
+    if (_isEditing && widget.document != null) {
+      error = await docProvider.updateDocument(
+        documentId: widget.document!.id!,
+        company: companyProvider.currentCompany!,
+        documentType: _documentType,
+        series: _seriesController.text,
+        paymentMethod: _paymentMethod,
+        paymentStatus: _paymentStatus,
+        notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+        taxRegime: _taxRegime,
+        deliveryDate: _deliveryDate,
+        deliveryAddress: _deliveryAddressController.text.trim(),
+      );
+    } else {
+      error = await docProvider.createDocument(
+        company: companyProvider.currentCompany!,
+        documentType: _documentType,
+        series: _seriesController.text,
+        paymentMethod: _paymentMethod,
+        paymentStatus: _paymentStatus,
+        notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+        taxRegime: _taxRegime,
+        deliveryDate: _deliveryDate,
+        deliveryAddress: _deliveryAddressController.text.trim(),
+      );
+    }
 
     if (!mounted) return;
 
-    if (doc != null) {
+    if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$_documentType ${doc.documentNumber} creada')),
+        SnackBar(content: Text(error), backgroundColor: Colors.red),
       );
-      Navigator.pushNamed(context, '/sales/${doc.id}');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isEditing
+              ? '$_documentType actualizada exitosamente'
+              : '$_documentType creada exitosamente'),
+        ),
+      );
+      if (_isEditing && widget.document != null) {
+        Navigator.pushReplacementNamed(
+            context, '/sales/${widget.document!.id}');
+      } else {
+        final docId = docProvider.lastCreatedDocId;
+        if (docId != null) {
+          Navigator.pushReplacementNamed(context, '/sales/$docId');
+        } else {
+          Navigator.pushNamed(context, '/sales');
+        }
+      }
     }
   }
 
@@ -200,7 +437,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nueva Venta'),
+        title: Text(_isEditing ? 'Editando ${widget.document!.documentNumber}' : 'Nueva Venta'),
         actions: [
           IconButton(
             icon: const Icon(Icons.check),
@@ -219,8 +456,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 const SizedBox(height: 12),
                 if (_documentType == 'Pedido') _buildDeliveryCard(theme),
                 if (_documentType == 'Pedido') const SizedBox(height: 12),
-                _buildTaxRegimeCard(theme),
-                const SizedBox(height: 12),
                 _buildCustomerCard(),
                 const SizedBox(height: 12),
                 _buildProductsCard(theme),
@@ -262,35 +497,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               },
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'Serie',
-                      helperText: 'Auto-generado según tipo',
-                    ),
-                    controller: _seriesController,
-                    readOnly: true,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _paymentMethod,
-                    decoration: const InputDecoration(labelText: 'Pago'),
-                    items: const [
-                      DropdownMenuItem(value: 'Efectivo', child: Text('Efectivo')),
-                      DropdownMenuItem(value: 'Tarjeta Débito', child: Text('Tarjeta Débito')),
-                      DropdownMenuItem(value: 'Tarjeta Crédito', child: Text('Tarjeta Crédito')),
-                      DropdownMenuItem(value: 'Yape', child: Text('Yape')),
-                      DropdownMenuItem(value: 'Plin', child: Text('Plin')),
-                      DropdownMenuItem(value: 'Transferencia', child: Text('Transferencia')),
-                    ],
-                    onChanged: (v) => setState(() => _paymentMethod = v!),
-                  ),
-                ),
-              ],
+            TextFormField(
+              decoration: const InputDecoration(
+                labelText: 'Serie',
+                helperText: 'Auto-generado según tipo',
+              ),
+              controller: _seriesController,
+              readOnly: true,
             ),
           ],
         ),
@@ -341,39 +554,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     );
   }
 
-  Widget _buildTaxRegimeCard(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Régimen Tributario', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 8),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'GENERAL', label: Text('General'), icon: Icon(Icons.check_circle)),
-                ButtonSegment(value: 'RUS', label: Text('RUS'), icon: Icon(Icons.percent)),
-              ],
-              selected: {_taxRegime},
-              onSelectionChanged: (v) {
-                setState(() => _taxRegime = v.first);
-              },
-            ),
-            if (_taxRegime == 'RUS')
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Régimen Único Simplificado — IGV exonerado (0%)',
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildCustomerCard() {
     return Consumer<DocumentProvider>(
       builder: (context, docProv, _) {
@@ -383,7 +563,40 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             leading: const CircleAvatar(child: Icon(Icons.person)),
             title: Text(customer?.displayName ?? 'Seleccionar Cliente'),
             subtitle: customer != null
-                ? Text('${customer.documentType}: ${customer.documentNumber}')
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          '${customer.documentType}: ${customer.documentNumber}'),
+                      Row(
+                        children: [
+                          if (customer.phone.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.phone, size: 12),
+                                  const SizedBox(width: 2),
+                                  Text(customer.phone,
+                                      style: const TextStyle(fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                          if (customer.email.isNotEmpty)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.email, size: 12),
+                                const SizedBox(width: 2),
+                                Text(customer.email,
+                                    style: const TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ],
+                  )
                 : const Text('Obligatorio para Boleta/Factura'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -436,25 +649,37 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   separatorBuilder: (_, _) => const Divider(),
                   itemBuilder: (context, index) {
                     final item = docProv.currentItems[index];
-                    return Dismissible(
-                      key: ValueKey('${item.productId}-$index'),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        color: Colors.red,
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 16),
-                        child: const Icon(Icons.delete, color: Colors.white),
-                      ),
-                      onDismissed: (_) => docProv.removeItem(index),
-                      child: ListTile(
-                        dense: true,
-                        title: Text(item.productName),
-                        subtitle: Text(
-                            '${item.quantity.toStringAsFixed(2)} x S/ ${item.unitPrice.toStringAsFixed(2)}'),
-                        trailing: Text(
-                          'S/ ${item.total.toStringAsFixed(2)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.productName,
+                                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${item.quantity.toStringAsFixed(2)} x S/ ${item.unitPrice.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text('S/ ${item.total.toStringAsFixed(2)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () => _editItemQuantity(context, index, item),
+                            tooltip: 'Editar cantidad',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => docProv.removeItem(index),
+                            tooltip: 'Eliminar producto',
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -503,6 +728,29 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             child: Column(
               children: [
                 Row(
+                  children: [
+                    Text('Régimen:', style: theme.textTheme.labelMedium),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'GENERAL', label: Text('General', style: TextStyle(fontSize: 11))),
+                          ButtonSegment(value: 'RUS', label: Text('RUS', style: TextStyle(fontSize: 11))),
+                        ],
+                        selected: {_taxRegime},
+                        onSelectionChanged: (v) {
+                          setState(() => _taxRegime = v.first);
+                        },
+                        style: ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Subtotal:'),
@@ -541,23 +789,56 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Total:',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 18)),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     Text(
                       isRus
                           ? 'S/ ${docProv.subtotal.toStringAsFixed(2)}'
                           : 'S/ ${docProv.total.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 18),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _paymentMethod,
+                  decoration: const InputDecoration(
+                    labelText: 'Método de Pago',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  isDense: true,
+                  items: const [
+                    DropdownMenuItem(value: 'Efectivo', child: Text('Efectivo')),
+                    DropdownMenuItem(value: 'Tarjeta Débito', child: Text('Tarjeta Débito')),
+                    DropdownMenuItem(value: 'Tarjeta Crédito', child: Text('Tarjeta Crédito')),
+                    DropdownMenuItem(value: 'Yape', child: Text('Yape')),
+                    DropdownMenuItem(value: 'Plin', child: Text('Plin')),
+                    DropdownMenuItem(value: 'Transferencia', child: Text('Transferencia')),
+                    DropdownMenuItem(value: 'Contraentrega', child: Text('Contraentrega')),
+                  ],
+                  onChanged: (v) => setState(() => _paymentMethod = v!),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _paymentStatus,
+                  decoration: const InputDecoration(
+                    labelText: 'Estado de Pago',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  isDense: true,
+                  items: const [
+                    DropdownMenuItem(value: 'TOTAL', child: Text('Pagado en total')),
+                    DropdownMenuItem(value: 'ADELANTO', child: Text('Con adelanto')),
+                    DropdownMenuItem(value: 'PAGO_PARCIAL', child: Text('Pagado en parte')),
+                  ],
+                  onChanged: (v) => setState(() => _paymentStatus = v!),
+                ),
+                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed:
-                        docProv.currentItems.isEmpty ? null : _createDocument,
+                    onPressed: docProv.currentItems.isEmpty ? null : _createDocument,
                     icon: const Icon(Icons.check_circle),
                     label: Text('Guardar $_documentType'),
                   ),
@@ -575,10 +856,7 @@ class _CustomerSearchSheet extends StatefulWidget {
   final ValueChanged<Customer> onSelected;
   final VoidCallback onNewCustomer;
 
-  const _CustomerSearchSheet({
-    required this.onSelected,
-    required this.onNewCustomer,
-  });
+  const _CustomerSearchSheet({required this.onSelected, required this.onNewCustomer});
 
   @override
   State<_CustomerSearchSheet> createState() => _CustomerSearchSheetState();
@@ -586,34 +864,86 @@ class _CustomerSearchSheet extends StatefulWidget {
 
 class _CustomerSearchSheetState extends State<_CustomerSearchSheet> {
   final _searchController = TextEditingController();
-  final _dniController = TextEditingController();
-  bool _consultingDni = false;
+  final _docController = TextEditingController();
+  bool _consultingDoc = false;
 
   @override
   void dispose() {
     _searchController.dispose();
-    _dniController.dispose();
+    _docController.dispose();
     super.dispose();
   }
 
-  Future<void> _consultDni() async {
-    final dni = _dniController.text.trim();
-    if (dni.length != 8) return;
+  Future<void> _consultDocument() async {
+    final doc = _docController.text.trim();
 
-    setState(() => _consultingDni = true);
+    if (doc.length == 8) {
+      final dni = doc;
+      setState(() => _consultingDoc = true);
 
-    final provider = context.read<CustomerProvider>();
-    final result = await provider.searchByDNI(dni);
+      final provider = context.read<CustomerProvider>();
+      final result = await provider.searchByDNI(dni);
 
-    if (!mounted) return;
-    setState(() => _consultingDni = false);
+      if (!mounted) return;
+      setState(() => _consultingDoc = false);
 
-    if (result.isSuccess && result.data != null) {
-      widget.onSelected(result.data!);
-      Navigator.pop(context);
+      if (result.isSuccess && result.data != null) {
+        widget.onSelected(result.data!);
+      } else {
+        final msg = result.error ?? 'No se encontró el DNI';
+        final isConfig = msg.contains('no configurada');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isConfig
+                ? 'API Inti no configurada. Vaya a Configuración para agregar su token.'
+                : msg),
+            duration: const Duration(seconds: 4),
+            action: isConfig
+                ? SnackBarAction(
+                    label: 'Configurar',
+                    onPressed: () =>
+                        Navigator.pushNamed(context, '/settings'),
+                  )
+                : null,
+          ),
+        );
+      }
+    } else if (doc.length == 11) {
+      final ruc = doc;
+      setState(() => _consultingDoc = true);
+
+      final provider = context.read<CustomerProvider>();
+      final result = await provider.searchByRUC(ruc);
+
+      if (!mounted) return;
+      setState(() => _consultingDoc = false);
+
+      if (result.isSuccess && result.data != null) {
+        widget.onSelected(result.data!);
+      } else {
+        final msg = result.error ?? 'No se encontró el RUC';
+        final isConfig = msg.contains('no configurada');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isConfig
+                ? 'API Inti no configurada. Vaya a Configuración para agregar su token.'
+                : msg),
+            duration: const Duration(seconds: 4),
+            action: isConfig
+                ? SnackBarAction(
+                    label: 'Configurar',
+                    onPressed: () =>
+                        Navigator.pushNamed(context, '/settings'),
+                  )
+                : null,
+          ),
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.error ?? 'No se encontró el DNI')),
+        const SnackBar(
+            content:
+                Text('Ingrese un DNI (8 dígitos) o RUC (11 dígitos) válido')),
       );
     }
   }
@@ -633,30 +963,31 @@ class _CustomerSearchSheetState extends State<_CustomerSearchSheet> {
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _dniController,
+                    controller: _docController,
                     decoration: InputDecoration(
-                      labelText: 'Consultar DNI',
-                      hintText: 'N° de documento',
+                      labelText: 'Consultar por DNI o RUC',
+                      hintText: 'DNI: 8 dígitos, RUC: 11 dígitos',
                       prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _consultingDni
+                      suffixIcon: _consultingDoc
                           ? const Padding(
                               padding: EdgeInsets.all(12),
                               child: SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
                               ),
                             )
                           : IconButton(
                               icon: const Icon(Icons.cloud_download),
-                              onPressed: _dniController.text.length >= 8
-                                  ? _consultDni
+                              onPressed: _docController.text.length >= 8
+                                  ? _consultDocument
                                   : null,
-                              tooltip: 'Consultar RENIEC',
+                              tooltip: 'Consultar API',
                             ),
                     ),
                     keyboardType: TextInputType.number,
-                    maxLength: 8,
+                    maxLength: 11,
                     onChanged: (_) => setState(() {}),
                   ),
                 ),
@@ -669,8 +1000,21 @@ class _CustomerSearchSheetState extends State<_CustomerSearchSheet> {
               ],
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('o buscar por nombre', style: TextStyle(fontSize: 12)),
+                ),
+                Expanded(child: Divider()),
+              ],
+            ),
+          ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: TextField(
               controller: _searchController,
               decoration: const InputDecoration(
@@ -698,8 +1042,7 @@ class _CustomerSearchSheetState extends State<_CustomerSearchSheet> {
                     final c = results[index];
                     return ListTile(
                       leading: CircleAvatar(
-                        child: Text(
-                            c.displayName.isNotEmpty ? c.displayName[0] : '?'),
+                        child: Text(c.displayName.isNotEmpty ? c.displayName[0] : '?'),
                       ),
                       title: Text(c.displayName),
                       subtitle: Text('${c.documentType}: ${c.documentNumber}'),
@@ -772,8 +1115,7 @@ class _ProductSearchSheetState extends State<_ProductSearchSheet> {
                     final p = results[index];
                     return ListTile(
                       leading: CircleAvatar(
-                          child:
-                              Text(p.code.isNotEmpty ? p.code[0] : 'P')),
+                          child: Text(p.code.isNotEmpty ? p.code[0] : 'P')),
                       title: Text(p.name),
                       subtitle: Text(
                           'Stock: ${p.stock} | S/ ${p.salePrice.toStringAsFixed(2)}'),

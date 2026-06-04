@@ -27,13 +27,28 @@ class DocumentCard extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (document.notes != null && document.notes!.isNotEmpty)
+              Text(
+                document.notes!,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.primary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
             Text(
               document.customerName,
               overflow: TextOverflow.ellipsis,
             ),
-            Text(
-              '${document.issueDate.day}/${document.issueDate.month}/${document.issueDate.year}',
-              style: const TextStyle(fontSize: 12),
+            Row(
+              children: [
+                Text(
+                  '${document.issueDate.day}/${document.issueDate.month}/${document.issueDate.year}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(width: 8),
+                _buildSendStatusBadge(),
+              ],
             ),
           ],
         ),
@@ -68,6 +83,42 @@ class DocumentCard extends StatelessWidget {
     );
   }
 
+  Widget _buildSendStatusBadge() {
+    final sent = document.sentWhatsapp || document.sentEmail;
+    final isSunat = document.documentType == 'Factura Electrónica' ||
+        document.documentType == 'Boleta Electrónica';
+    final sunatOk = document.status == 'ACEPTADO' || document.status == 'ENVIADO';
+
+    Color color;
+    String label;
+
+    if (sent) {
+      color = Colors.green;
+      label = 'Cliente ✓';
+    } else if (isSunat && sunatOk) {
+      color = Colors.blue;
+      label = 'SUNAT ✓';
+    } else if (document.status == 'BORRADOR' || document.status == 'PEDIDO') {
+      color = Colors.amber.shade700;
+      label = 'Interno';
+    } else {
+      color = Colors.red;
+      label = 'Pendiente';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
   Widget _buildTypeIcon(ThemeData theme) {
     IconData icon;
     Color color;
@@ -92,6 +143,10 @@ class DocumentCard extends StatelessWidget {
       case 'Nota de Venta':
         icon = Icons.shopping_cart;
         color = Colors.teal;
+        break;
+      case 'Pedido':
+        icon = Icons.assignment;
+        color = Colors.purple;
         break;
       default:
         icon = Icons.description;

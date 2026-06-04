@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
 import '../services/database_service.dart';
 
@@ -56,6 +57,11 @@ class AuthProvider extends ChangeNotifier {
 
   void logout() {
     _currentUser = null;
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.remove('saved_username');
+      prefs.remove('saved_password');
+      prefs.setBool('remember_me', false);
+    });
     notifyListeners();
   }
 }

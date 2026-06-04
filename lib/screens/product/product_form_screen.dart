@@ -20,8 +20,28 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _salePriceController = TextEditingController();
   final _stockController = TextEditingController(text: '0');
   final _unitTypeController = TextEditingController(text: 'UNIDAD');
+  String _selectedCategory = '';
+  bool _customCategory = false;
   bool _isEditing = false;
   bool _isSaving = false;
+  int? _editingId;
+
+  static const _categoryOptions = [
+    'ABARROTES',
+    'BEBIDAS',
+    'LÁCTEOS',
+    'PANADERÍA',
+    'CARNES',
+    'FRUTAS Y VERDURAS',
+    'LIMPIEZA',
+    'HIGIENE',
+    'ELECTRÓNICA',
+    'ROPA',
+    'CALZADO',
+    'HERRAMIENTAS',
+    'OFICINA',
+    'OTROS',
+  ];
 
   @override
   void initState() {
@@ -29,6 +49,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final args = ModalRoute.of(context)?.settings.arguments as Product?;
     if (args != null) {
       _isEditing = true;
+      _editingId = args.id;
       _codeController.text = args.code;
       _nameController.text = args.name;
       _descriptionController.text = args.description;
@@ -37,6 +58,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _salePriceController.text = args.salePrice.toStringAsFixed(2);
       _stockController.text = args.stock.toString();
       _unitTypeController.text = args.unitType;
+      if (_categoryOptions.contains(args.category.toUpperCase())) {
+        _selectedCategory = args.category.toUpperCase();
+      } else if (args.category.isNotEmpty) {
+        _customCategory = true;
+        _selectedCategory = 'OTROS';
+        _categoryController.text = args.category;
+      }
     }
   }
 
@@ -59,10 +87,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     setState(() => _isSaving = true);
 
     final product = Product(
+      id: _editingId,
       code: _codeController.text.trim().toUpperCase(),
       name: _nameController.text.trim().toUpperCase(),
       description: _descriptionController.text.trim(),
-      category: _categoryController.text.trim().toUpperCase(),
+      category: _customCategory
+          ? _categoryController.text.trim().toUpperCase()
+          : _selectedCategory,
       purchasePrice: double.tryParse(_purchasePriceController.text) ?? 0,
       salePrice: double.tryParse(_salePriceController.text) ?? 0,
       stock: int.tryParse(_stockController.text) ?? 0,
@@ -173,11 +204,34 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _categoryController,
-                decoration: const InputDecoration(labelText: 'Categoría'),
-                textCapitalization: TextCapitalization.characters,
+              DropdownButtonFormField<String>(
+                initialValue: _selectedCategory.isEmpty ? null : _selectedCategory,
+                decoration: const InputDecoration(
+                  labelText: 'Categoría',
+                  border: OutlineInputBorder(),
+                ),
+                items: _categoryOptions
+                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                    .toList(),
+                onChanged: (v) {
+                  setState(() {
+                    _selectedCategory = v!;
+                    _customCategory = v == 'OTROS';
+                    if (!_customCategory) _categoryController.clear();
+                  });
+                },
               ),
+              if (_customCategory) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _categoryController,
+                  decoration: const InputDecoration(
+                    labelText: 'Especifique categoría',
+                    border: OutlineInputBorder(),
+                  ),
+                  textCapitalization: TextCapitalization.characters,
+                ),
+              ],
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: _isSaving ? null : _save,

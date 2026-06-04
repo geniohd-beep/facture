@@ -24,6 +24,7 @@ dependencies:
   qr_flutter: ^4.1.0
   sign_in_button: ^3.2.0
   crypto: ^3.0.6
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

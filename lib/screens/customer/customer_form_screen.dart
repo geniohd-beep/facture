@@ -16,14 +16,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   final _docNumberController = TextEditingController();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _emailController = TextEditingController();
+  final List<TextEditingController> _addressControllers = [TextEditingController()];
+  final List<TextEditingController> _phoneControllers = [TextEditingController()];
+  final List<TextEditingController> _emailControllers = [TextEditingController()];
   String _docType = 'DNI';
   bool _isConsulting = false;
   bool _isSaving = false;
   bool _isEditing = false;
   bool _initialized = false;
+  bool _fromApi = false;
 
   @override
   void didChangeDependencies() {
@@ -33,13 +34,26 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       final args = ModalRoute.of(context)?.settings.arguments as Customer?;
       if (args != null) {
         _isEditing = true;
+        _fromApi = args.fromApi;
         _docType = args.documentType;
         _docNumberController.text = args.documentNumber;
         _firstNameController.text = args.firstName;
         _lastNameController.text = args.lastName;
-        _addressController.text = args.address;
-        _phoneController.text = args.phone;
-        _emailController.text = args.email;
+        _initMultiControllers(_addressControllers, args.address);
+        _initMultiControllers(_phoneControllers, args.phone);
+        _initMultiControllers(_emailControllers, args.email);
+      }
+    }
+  }
+
+  void _initMultiControllers(List<TextEditingController> controllers, String value) {
+    final parts = value.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    controllers.clear();
+    if (parts.isEmpty) {
+      controllers.add(TextEditingController());
+    } else {
+      for (final part in parts) {
+        controllers.add(TextEditingController(text: part));
       }
     }
   }
@@ -49,10 +63,22 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _docNumberController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
-    _addressController.dispose();
-    _phoneController.dispose();
-    _emailController.dispose();
+    for (final c in _addressControllers) { c.dispose(); }
+    for (final c in _phoneControllers) { c.dispose(); }
+    for (final c in _emailControllers) { c.dispose(); }
     super.dispose();
+  }
+
+  void _addController(List<TextEditingController> list) {
+    setState(() => list.add(TextEditingController()));
+  }
+
+  void _removeController(List<TextEditingController> list, int index) {
+    if (list.length <= 1) return;
+    setState(() {
+      list[index].dispose();
+      list.removeAt(index);
+    });
   }
 
   Future<void> _consultDocument() async {
@@ -71,14 +97,21 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
     if (result.isSuccess && result.data != null) {
       final customer = result.data!;
+      _fromApi = customer.fromApi;
       _firstNameController.text = customer.firstName;
       _lastNameController.text = customer.lastName;
-      _addressController.text = customer.address;
+      _initMultiControllers(_addressControllers, customer.address);
+      _initMultiControllers(_phoneControllers, customer.phone);
+      _initMultiControllers(_emailControllers, customer.email);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result.error ?? 'No se encontraron datos')),
       );
     }
+  }
+
+  String _joinControllers(List<TextEditingController> list) {
+    return list.map((c) => c.text.trim()).where((s) => s.isNotEmpty).join(', ');
   }
 
   Future<void> _save() async {
@@ -94,9 +127,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       fullName:
           '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'
               .trim(),
-      address: _addressController.text.trim(),
-      phone: _phoneController.text.trim(),
-      email: _emailController.text.trim(),
+      address: _joinControllers(_addressControllers),
+      phone: _joinControllers(_phoneControllers),
+      email: _joinControllers(_emailControllers),
+      fromApi: _fromApi,
     );
 
     final result = await context.read<CustomerProvider>().saveCustomer(customer);
@@ -116,6 +150,56 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     }
   }
 
+  Widget _buildMultiField({
+    required String label,
+    required List<TextEditingController> controllers,
+    required IconData icon,
+    TextInputType? keyboardType,
+    bool readOnly = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < controllers.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: controllers[i],
+                  decoration: InputDecoration(
+                    labelText: i == 0 ? label : '$label ${i + 1}',
+                    prefixIcon: Icon(icon, size: 18),
+                  ),
+                  keyboardType: keyboardType,
+                  readOnly: readOnly,
+                ),
+              ),
+              if (!readOnly) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline, size: 20),
+                  onPressed: controllers.length > 1
+                      ? () => _removeController(controllers, i)
+                      : null,
+                  color: Colors.red,
+                  tooltip: 'Eliminar',
+                ),
+                if (i == controllers.length - 1)
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, size: 20),
+                    onPressed: () => _addController(controllers),
+                    color: Colors.green,
+                    tooltip: 'Agregar otro',
+                  ),
+              ],
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -130,10 +214,16 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: DocumentTypeSelector(
-                      initialValue: _docType,
-                      onChanged: (v) => setState(() => _docType = v!),
-                    ),
+                    child: _fromApi
+                        ? TextFormField(
+                            initialValue: _docType,
+                            decoration: const InputDecoration(labelText: 'Tipo Doc.'),
+                            readOnly: true,
+                          )
+                        : DocumentTypeSelector(
+                            initialValue: _docType,
+                            onChanged: (v) => setState(() => _docType = v!),
+                          ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -142,7 +232,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                       docType: _docType,
                       controller: _docNumberController,
                       isLoading: _isConsulting,
-                      onConsult: _consultDocument,
+                      onConsult: _fromApi ? null : _consultDocument,
+                      readOnly: _fromApi,
                     ),
                   ),
                 ],
@@ -152,38 +243,34 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                 controller: _firstNameController,
                 decoration: const InputDecoration(labelText: 'Nombres'),
                 textCapitalization: TextCapitalization.words,
+                readOnly: _fromApi,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _lastNameController,
                 decoration: const InputDecoration(labelText: 'Apellidos'),
                 textCapitalization: TextCapitalization.words,
+                readOnly: _fromApi,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(labelText: 'Dirección'),
-                maxLines: 2,
+              _buildMultiField(
+                label: 'Dirección',
+                controllers: _addressControllers,
+                icon: Icons.location_on,
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _phoneController,
-                      decoration: const InputDecoration(labelText: 'Teléfono'),
-                      keyboardType: TextInputType.phone,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                  ),
-                ],
+              _buildMultiField(
+                label: 'Teléfono',
+                controllers: _phoneControllers,
+                icon: Icons.phone,
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 16),
+              _buildMultiField(
+                label: 'Email',
+                controllers: _emailControllers,
+                icon: Icons.email,
+                keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 24),
               FilledButton.icon(

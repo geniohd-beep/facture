@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import '../models/customer.dart';
 import '../services/database_service.dart';
 import '../services/reniec_service.dart';
+import '../services/settings_service.dart';
 import '../utils/api_result.dart';
 
 class CustomerProvider extends ChangeNotifier {
   final DatabaseService _db = DatabaseService();
   final ReniecService _reniec = ReniecService();
+  final SettingsService _settings = SettingsService();
   List<Customer> _customers = [];
   List<Customer> _searchResults = [];
   bool _isLoading = false;
@@ -16,6 +18,12 @@ class CustomerProvider extends ChangeNotifier {
   List<Customer> get searchResults => _searchResults;
   bool get isLoading => _isLoading;
   String? get lastError => _lastError;
+
+  CustomerProvider() {
+    _reniec.setOnRecord((stats) {
+      _db.insertConsultationStats(stats);
+    });
+  }
 
   Future<void> loadCustomers() async {
     _isLoading = true;
@@ -54,7 +62,20 @@ class CustomerProvider extends ChangeNotifier {
     try {
       final existing = await _db.getCustomerByDocument('DNI', dni);
       if (existing != null) return ApiResult.success(existing);
-      return await _reniec.consultDNI(dni);
+
+      final apiinti = await _settings.getApiintiToken();
+      final jsonpe = await _settings.getJsonpeToken();
+      _reniec.setTokens(apiinti: apiinti, jsonpe: jsonpe);
+
+      final result = await _reniec.consultDNI(dni);
+      if (result.isSuccess && result.data != null) {
+        final apiCustomer = result.data!.copyWith(fromApi: true);
+        final saved = await _db.insertCustomer(apiCustomer);
+        final savedCustomer = apiCustomer.copyWith(id: saved);
+        await loadCustomers();
+        return ApiResult.success(savedCustomer);
+      }
+      return result;
     } catch (e) {
       return ApiResult.failure('Error al consultar DNI: $e');
     }
@@ -64,7 +85,20 @@ class CustomerProvider extends ChangeNotifier {
     try {
       final existing = await _db.getCustomerByDocument('RUC', ruc);
       if (existing != null) return ApiResult.success(existing);
-      return await _reniec.consultRUC(ruc);
+
+      final apiinti = await _settings.getApiintiToken();
+      final jsonpe = await _settings.getJsonpeToken();
+      _reniec.setTokens(apiinti: apiinti, jsonpe: jsonpe);
+
+      final result = await _reniec.consultRUC(ruc);
+      if (result.isSuccess && result.data != null) {
+        final apiCustomer = result.data!.copyWith(fromApi: true);
+        final saved = await _db.insertCustomer(apiCustomer);
+        final savedCustomer = apiCustomer.copyWith(id: saved);
+        await loadCustomers();
+        return ApiResult.success(savedCustomer);
+      }
+      return result;
     } catch (e) {
       return ApiResult.failure('Error al consultar RUC: $e');
     }

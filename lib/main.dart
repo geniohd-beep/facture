@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'config/theme.dart';
 import 'services/db_init.dart';
+import 'models/customer.dart';
 import 'providers/auth_provider.dart';
 import 'providers/company_provider.dart';
 import 'providers/customer_provider.dart';
@@ -13,12 +14,14 @@ import 'screens/company/company_list_screen.dart';
 import 'screens/company/company_form_screen.dart';
 import 'screens/customer/customer_list_screen.dart';
 import 'screens/customer/customer_form_screen.dart';
+import 'screens/customer/customer_history_screen.dart';
 import 'screens/product/product_list_screen.dart';
 import 'screens/product/product_form_screen.dart';
 import 'screens/sales/sales_list_screen.dart';
 import 'screens/sales/new_sale_screen.dart';
 import 'screens/sales/sale_detail_screen.dart';
 import 'screens/reports/reports_screen.dart';
+import 'screens/reports/api_stats_screen.dart';
 import 'screens/settings/settings_screen.dart';
 
 void main() {
@@ -73,6 +76,16 @@ class FactureApp extends StatelessWidget {
               return MaterialPageRoute(
                 builder: (_) => const CustomerFormScreen(),
               );
+            case '/customers/history':
+              final custArg = settings.arguments;
+              if (custArg is Customer) {
+                return MaterialPageRoute(
+                  builder: (_) => CustomerHistoryScreen(customer: custArg),
+                );
+              }
+              return MaterialPageRoute(
+                builder: (_) => const CustomerListScreen(),
+              );
             case '/products':
               return MaterialPageRoute(
                 builder: (_) => const ProductListScreen(),
@@ -92,6 +105,10 @@ class FactureApp extends StatelessWidget {
             case '/reports':
               return MaterialPageRoute(
                 builder: (_) => const ReportsScreen(),
+              );
+            case '/reports/api-stats':
+              return MaterialPageRoute(
+                builder: (_) => const ApiStatsScreen(),
               );
             case '/settings':
               return MaterialPageRoute(

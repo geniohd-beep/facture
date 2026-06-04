@@ -9,6 +9,7 @@ class AppDrawer extends StatelessWidget {
   final VoidCallback onCustomers;
   final VoidCallback onCompanies;
   final VoidCallback onReports;
+  final VoidCallback onApiStats;
   final VoidCallback onSettings;
   final VoidCallback onLogout;
 
@@ -22,6 +23,7 @@ class AppDrawer extends StatelessWidget {
     required this.onCustomers,
     required this.onCompanies,
     required this.onReports,
+    required this.onApiStats,
     required this.onSettings,
     required this.onLogout,
   });
@@ -96,6 +98,11 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.bar_chart,
             label: 'Reportes',
             onTap: onReports,
+          ),
+          _buildMenuItem(
+            icon: Icons.query_stats,
+            label: 'Estadísticas API',
+            onTap: onApiStats,
           ),
           _buildMenuItem(
             icon: Icons.settings,

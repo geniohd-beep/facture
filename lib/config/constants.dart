@@ -2,9 +2,11 @@ class AppConstants {
   static const String appName = 'Facture';
   static const String appVersion = '1.0.0';
   static const String dbName = 'facture.db';
-  static const int dbVersion = 2;
+  static const int dbVersion = 4;
 
-  static const String reniecApiUrl = 'https://api.reniec.com/v1';
+  static const String apiintiBaseUrl = 'https://api.apiinti.dev/api/v1';
+  static const String jsonpeBaseUrl = 'https://api.json.pe/api';
+  static const String graphperuBaseUrl = 'https://graphperu.daustinn.com/api';
   static const String sunatApiUrl = 'https://api.sunat.com/v1';
 
   static const List<String> documentTypes = [

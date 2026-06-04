@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/product_provider.dart';
+import '../../models/product.dart';
 
 class ProductListScreen extends StatefulWidget {
   const ProductListScreen({super.key});
@@ -26,6 +27,44 @@ class _ProductListScreenState extends State<ProductListScreen> {
     super.dispose();
   }
 
+  Color _stockColor(int stock) {
+    if (stock <= 0) return Colors.red;
+    if (stock >= 100) return Colors.green;
+    final ratio = stock / 100.0;
+    return Color.lerp(Colors.orange, Colors.green, ratio)!;
+  }
+
+  Widget _stockBadge(int stock) {
+    final color = _stockColor(stock);
+    final bg = color.withValues(alpha: 0.15);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            stock <= 0 ? Icons.error_outline : Icons.inventory_2,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '$stock',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -39,7 +78,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: TextField(
               controller: _searchController,
               decoration: const InputDecoration(
@@ -71,42 +110,79 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   return const Center(child: Text('No hay productos registrados'));
                 }
 
-                return ListView.builder(
-                  itemCount: products.length,
-                  itemBuilder: (context, index) {
-                    final product = products[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          child: Text(product.code.isNotEmpty
-                              ? product.code[0]
-                              : 'P'),
-                        ),
-                        title: Text(product.name),
-                        subtitle: Text(
-                            'Código: ${product.code} | Stock: ${product.stock} ${product.unitType}'),
-                        trailing: Text(
-                          'S/ ${product.salePrice.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        onTap: () => Navigator.pushNamed(
-                          context,
-                          '/products/form',
-                          arguments: product,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text(
+                        'Productos disponibles (${products.length})',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    );
-                  },
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: products.length,
+                        itemBuilder: (context, index) {
+                          final product = products[index];
+                          return _buildProductCard(product);
+                        },
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildProductCard(Product product) {
+    final stockColor = _stockColor(product.stock);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ListTile(
+        leading: CircleAvatar(
+          radius: 22,
+          backgroundColor: stockColor.withValues(alpha: 0.15),
+          child: Text(
+            product.name.isNotEmpty ? product.name[0].toUpperCase() : 'P',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: stockColor,
+            ),
+          ),
+        ),
+        title: Text(
+          product.name,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Código: ${product.code} | ${product.unitType}',
+                style: const TextStyle(fontSize: 12)),
+            Text(
+              'S/ ${product.salePrice.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        trailing: _stockBadge(product.stock),
+        onTap: () => Navigator.pushNamed(
+          context,
+          '/products/form',
+          arguments: product,
+        ),
       ),
     );
   }

@@ -277,6 +277,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Navigator.pop(context);
         Navigator.pushNamed(context, '/reports');
       },
+      onApiStats: () {
+        Navigator.pop(context);
+        Navigator.pushNamed(context, '/reports/api-stats');
+      },
       onSettings: () {
         Navigator.pop(context);
         Navigator.pushNamed(context, '/settings');

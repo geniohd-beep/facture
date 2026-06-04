@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -15,7 +16,39 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isRegisterMode = false;
+  bool _rememberMe = false;
   final _fullNameController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUsername = prefs.getString('saved_username');
+    final savedPassword = prefs.getString('saved_password');
+    final remember = prefs.getBool('remember_me') ?? false;
+    if (savedUsername != null && remember) {
+      _usernameController.text = savedUsername;
+      _passwordController.text = savedPassword ?? '';
+      setState(() => _rememberMe = true);
+    }
+  }
+
+  Future<void> _saveCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setString('saved_username', _usernameController.text.trim());
+      await prefs.setString('saved_password', _passwordController.text);
+      await prefs.setBool('remember_me', true);
+    } else {
+      await prefs.remove('saved_username');
+      await prefs.remove('saved_password');
+      await prefs.setBool('remember_me', false);
+    }
+  }
 
   @override
   void dispose() {
@@ -54,6 +87,8 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       if (result == 'ok') {
+        await _saveCredentials();
+        if (!mounted) return;
         Navigator.of(context).pushReplacementNamed('/dashboard');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -140,6 +175,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       v?.isEmpty ?? true ? 'Ingrese su contraseña' : null,
                 ),
                 const SizedBox(height: 24),
+                if (!_isRegisterMode)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: CheckboxListTile(
+                      value: _rememberMe,
+                      onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                      title: const Text('Recordar sesión'),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      dense: true,
+                    ),
+                  ),
                 Consumer<AuthProvider>(
                   builder: (context, auth, _) {
                     return FilledButton(
