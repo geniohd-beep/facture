@@ -43,29 +43,35 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     'OTROS',
   ];
 
+  Product? _editArgs;
+
   @override
   void initState() {
     super.initState();
-    final args = ModalRoute.of(context)?.settings.arguments as Product?;
-    if (args != null) {
-      _isEditing = true;
-      _editingId = args.id;
-      _codeController.text = args.code;
-      _nameController.text = args.name;
-      _descriptionController.text = args.description;
-      _categoryController.text = args.category;
-      _purchasePriceController.text = args.purchasePrice.toStringAsFixed(2);
-      _salePriceController.text = args.salePrice.toStringAsFixed(2);
-      _stockController.text = args.stock.toString();
-      _unitTypeController.text = args.unitType;
-      if (_categoryOptions.contains(args.category.toUpperCase())) {
-        _selectedCategory = args.category.toUpperCase();
-      } else if (args.category.isNotEmpty) {
-        _customCategory = true;
-        _selectedCategory = 'OTROS';
-        _categoryController.text = args.category;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Product?;
+      if (args != null && mounted) {
+        setState(() {
+          _isEditing = true;
+          _editingId = args.id;
+          _codeController.text = args.code;
+          _nameController.text = args.name;
+          _descriptionController.text = args.description;
+          _categoryController.text = args.category;
+          _purchasePriceController.text = args.purchasePrice.toStringAsFixed(2);
+          _salePriceController.text = args.salePrice.toStringAsFixed(2);
+          _stockController.text = args.stock.toString();
+          _unitTypeController.text = args.unitType;
+          if (_categoryOptions.contains(args.category.toUpperCase())) {
+            _selectedCategory = args.category.toUpperCase();
+          } else if (args.category.isNotEmpty) {
+            _customCategory = true;
+            _selectedCategory = 'OTROS';
+            _categoryController.text = args.category;
+          }
+        });
       }
-    }
+    });
   }
 
   @override
