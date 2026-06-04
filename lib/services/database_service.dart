@@ -328,6 +328,19 @@ class DatabaseService {
     return maps.map((m) => Product.fromMap(m)).toList();
   }
 
+  Future<List<Product>> getAllProducts() async {
+    final db = await database;
+    final maps = await db.query('products', orderBy: 'name ASC');
+    return maps.map((m) => Product.fromMap(m)).toList();
+  }
+
+  Future<void> insertProductIfNotExists(Product product) async {
+    final existing = await getProductByCode(product.code);
+    if (existing == null) {
+      await insertProduct(product);
+    }
+  }
+
   Future<void> updateProductStock(int productId, int delta) async {
     final db = await database;
     await db.rawUpdate(

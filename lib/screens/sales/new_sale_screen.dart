@@ -864,86 +864,93 @@ class _CustomerSearchSheet extends StatefulWidget {
 
 class _CustomerSearchSheetState extends State<_CustomerSearchSheet> {
   final _searchController = TextEditingController();
-  final _docController = TextEditingController();
-  bool _consultingDoc = false;
+  final _dniController = TextEditingController();
+  final _rucController = TextEditingController();
+  bool _consultingDNI = false;
+  bool _consultingRUC = false;
 
   @override
   void dispose() {
     _searchController.dispose();
-    _docController.dispose();
+    _dniController.dispose();
+    _rucController.dispose();
     super.dispose();
   }
 
-  Future<void> _consultDocument() async {
-    final doc = _docController.text.trim();
-
-    if (doc.length == 8) {
-      final dni = doc;
-      setState(() => _consultingDoc = true);
-
-      final provider = context.read<CustomerProvider>();
-      final result = await provider.searchByDNI(dni);
-
-      if (!mounted) return;
-      setState(() => _consultingDoc = false);
-
-      if (result.isSuccess && result.data != null) {
-        widget.onSelected(result.data!);
-      } else {
-        final msg = result.error ?? 'No se encontró el DNI';
-        final isConfig = msg.contains('no configurada');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isConfig
-                ? 'API Inti no configurada. Vaya a Configuración para agregar su token.'
-                : msg),
-            duration: const Duration(seconds: 4),
-            action: isConfig
-                ? SnackBarAction(
-                    label: 'Configurar',
-                    onPressed: () =>
-                        Navigator.pushNamed(context, '/settings'),
-                  )
-                : null,
-          ),
-        );
-      }
-    } else if (doc.length == 11) {
-      final ruc = doc;
-      setState(() => _consultingDoc = true);
-
-      final provider = context.read<CustomerProvider>();
-      final result = await provider.searchByRUC(ruc);
-
-      if (!mounted) return;
-      setState(() => _consultingDoc = false);
-
-      if (result.isSuccess && result.data != null) {
-        widget.onSelected(result.data!);
-      } else {
-        final msg = result.error ?? 'No se encontró el RUC';
-        final isConfig = msg.contains('no configurada');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isConfig
-                ? 'API Inti no configurada. Vaya a Configuración para agregar su token.'
-                : msg),
-            duration: const Duration(seconds: 4),
-            action: isConfig
-                ? SnackBarAction(
-                    label: 'Configurar',
-                    onPressed: () =>
-                        Navigator.pushNamed(context, '/settings'),
-                  )
-                : null,
-          ),
-        );
-      }
-    } else {
+  Future<void> _consultDNI() async {
+    final dni = _dniController.text.trim();
+    if (dni.length != 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Ingrese un DNI (8 dígitos) o RUC (11 dígitos) válido')),
+        const SnackBar(content: Text('Ingrese un DNI válido (8 dígitos)')),
+      );
+      return;
+    }
+
+    setState(() => _consultingDNI = true);
+    final provider = context.read<CustomerProvider>();
+    final result = await provider.searchByDNI(dni);
+
+    if (!mounted) return;
+    setState(() => _consultingDNI = false);
+
+    if (result.isSuccess && result.data != null) {
+      widget.onSelected(result.data!);
+    } else {
+      final msg = result.error ?? 'No se encontró el DNI';
+      final isConfig = msg.contains('no configurada');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isConfig
+              ? 'API Inti no configurada. Vaya a Configuración para agregar su token.'
+              : msg),
+          duration: const Duration(seconds: 4),
+          action: isConfig
+              ? SnackBarAction(
+                  label: 'Configurar',
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/settings'),
+                )
+              : null,
+        ),
+      );
+    }
+  }
+
+  Future<void> _consultRUC() async {
+    final ruc = _rucController.text.trim();
+    if (ruc.length != 11) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingrese un RUC válido (11 dígitos)')),
+      );
+      return;
+    }
+
+    setState(() => _consultingRUC = true);
+    final provider = context.read<CustomerProvider>();
+    final result = await provider.searchByRUC(ruc);
+
+    if (!mounted) return;
+    setState(() => _consultingRUC = false);
+
+    if (result.isSuccess && result.data != null) {
+      widget.onSelected(result.data!);
+    } else {
+      final msg = result.error ?? 'No se encontró el RUC';
+      final isConfig = msg.contains('no configurada');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isConfig
+              ? 'API Inti no configurada. Vaya a Configuración para agregar su token.'
+              : msg),
+          duration: const Duration(seconds: 4),
+          action: isConfig
+              ? SnackBarAction(
+                  label: 'Configurar',
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/settings'),
+                )
+              : null,
+        ),
       );
     }
   }
@@ -963,12 +970,12 @@ class _CustomerSearchSheetState extends State<_CustomerSearchSheet> {
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _docController,
+                    controller: _dniController,
                     decoration: InputDecoration(
-                      labelText: 'Consultar por DNI o RUC',
-                      hintText: 'DNI: 8 dígitos, RUC: 11 dígitos',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _consultingDoc
+                      labelText: 'Consultar DNI',
+                      hintText: '8 dígitos',
+                      prefixIcon: const Icon(Icons.person),
+                      suffixIcon: _consultingDNI
                           ? const Padding(
                               padding: EdgeInsets.all(12),
                               child: SizedBox(
@@ -980,10 +987,41 @@ class _CustomerSearchSheetState extends State<_CustomerSearchSheet> {
                             )
                           : IconButton(
                               icon: const Icon(Icons.cloud_download),
-                              onPressed: _docController.text.length >= 8
-                                  ? _consultDocument
+                              onPressed: _dniController.text.length == 8
+                                  ? _consultDNI
                                   : null,
-                              tooltip: 'Consultar API',
+                              tooltip: 'Consultar DNI',
+                            ),
+                    ),
+                    keyboardType: TextInputType.number,
+                    maxLength: 8,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _rucController,
+                    decoration: InputDecoration(
+                      labelText: 'Consultar RUC',
+                      hintText: '11 dígitos',
+                      prefixIcon: const Icon(Icons.business),
+                      suffixIcon: _consultingRUC
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              ),
+                            )
+                          : IconButton(
+                              icon: const Icon(Icons.cloud_download),
+                              onPressed: _rucController.text.length == 11
+                                  ? _consultRUC
+                                  : null,
+                              tooltip: 'Consultar RUC',
                             ),
                     ),
                     keyboardType: TextInputType.number,

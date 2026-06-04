@@ -97,41 +97,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 16),
             if (!_loadingSummary && _summary.isNotEmpty)
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.5,
+              Row(
                 children: [
-                  _buildSummaryCard(
-                    theme,
-                    'Ventas del Mes',
-                    currencyFormat.format(_summary['total_sales'] ?? 0),
-                    Icons.trending_up,
-                    Colors.green,
+                  Expanded(
+                    child: _buildSummaryCard(
+                      theme,
+                      'Ventas del Mes',
+                      currencyFormat.format(_summary['total_sales'] ?? 0),
+                      Icons.trending_up,
+                      Colors.green,
+                    ),
                   ),
-                  _buildSummaryCard(
-                    theme,
-                    'Documentos',
-                    '${(_summary['total_docs'] ?? 0).toInt()}',
-                    Icons.description,
-                    Colors.blue,
-                  ),
-                  _buildSummaryCard(
-                    theme,
-                    'Facturas',
-                    currencyFormat.format(_summary['total_facturas'] ?? 0),
-                    Icons.receipt_long,
-                    Colors.indigo,
-                  ),
-                  _buildSummaryCard(
-                    theme,
-                    'Boletas',
-                    currencyFormat.format(_summary['total_boletas'] ?? 0),
-                    Icons.receipt,
-                    Colors.teal,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildSummaryCard(
+                      theme,
+                      'Documentos',
+                      '${(_summary['total_docs'] ?? 0).toInt()}',
+                      Icons.description,
+                      Colors.blue,
+                    ),
                   ),
                 ],
               ),

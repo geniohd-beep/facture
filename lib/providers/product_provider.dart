@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/database_service.dart';
@@ -37,5 +38,53 @@ class ProductProvider extends ChangeNotifier {
   Future<void> searchProducts(String query) async {
     _searchResults = await _db.searchProducts(query);
     notifyListeners();
+  }
+
+  Future<String> exportProductsToJson() async {
+    final all = await _db.getAllProducts();
+    final list = all.map((p) => {
+      'code': p.code,
+      'name': p.name,
+      'description': p.description,
+      'category': p.category,
+      'purchase_price': p.purchasePrice,
+      'sale_price': p.salePrice,
+      'stock': p.stock,
+      'unit_type': p.unitType,
+      'is_active': p.isActive ? 1 : 0,
+    }).toList();
+    final json = {
+      'version': 1,
+      'exported_at': DateTime.now().toIso8601String(),
+      'products': list,
+    };
+    return const JsonEncoder.withIndent('  ').convert(json);
+  }
+
+  Future<String> importProductsFromJson(String jsonString) async {
+    try {
+      final data = jsonDecode(jsonString) as Map<String, dynamic>;
+      final list = data['products'] as List<dynamic>;
+      int imported = 0;
+      for (final item in list) {
+        final product = Product(
+          code: item['code'],
+          name: item['name'],
+          description: item['description'] ?? '',
+          category: item['category'] ?? '',
+          purchasePrice: (item['purchase_price'] ?? 0).toDouble(),
+          salePrice: (item['sale_price'] ?? 0).toDouble(),
+          stock: item['stock'] ?? 0,
+          unitType: item['unit_type'] ?? 'UNIDAD',
+          isActive: (item['is_active'] ?? 1) == 1,
+        );
+        await _db.insertProductIfNotExists(product);
+        imported++;
+      }
+      await loadProducts();
+      return 'Importados $imported productos correctamente';
+    } catch (e) {
+      return 'Error al importar: $e';
+    }
   }
 }
