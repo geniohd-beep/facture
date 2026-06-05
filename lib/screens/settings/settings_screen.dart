@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../main.dart';
 import '../../providers/product_provider.dart';
 import '../../services/file_util.dart';
 import '../../services/settings_service.dart';
@@ -17,12 +18,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _apiintiTokenController = TextEditingController();
   final _jsonpeTokenController = TextEditingController();
   final _settingsService = SettingsService();
+  late ThemeMode _themeMode;
   bool _isLoading = true;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    _themeMode = FactureApp.of(context)?.themeMode ?? ThemeMode.light;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadTokens();
     });
@@ -104,10 +107,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.cloud,
+                              Icon(_themeMode == ThemeMode.dark
+                                  ? Icons.dark_mode
+                                  : Icons.light_mode,
                                   color: Theme.of(context).colorScheme.primary),
                               const SizedBox(width: 8),
-                              Text('API SUNAT',
+                              Text('Apariencia',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SegmentedButton<ThemeMode>(
+                            segments: const [
+                              ButtonSegment(
+                                value: ThemeMode.light,
+                                icon: Icon(Icons.light_mode),
+                                label: Text('Claro'),
+                              ),
+                              ButtonSegment(
+                                value: ThemeMode.dark,
+                                icon: Icon(Icons.dark_mode),
+                                label: Text('Oscuro'),
+                              ),
+                              ButtonSegment(
+                                value: ThemeMode.system,
+                                icon: Icon(Icons.settings),
+                                label: Text('Sistema'),
+                              ),
+                            ],
+                            selected: {_themeMode},
+                            onSelectionChanged: (selected) {
+                              final mode = selected.first;
+                              FactureApp.of(context)?.setThemeMode(mode);
+                              SettingsService().setThemeMode(mode);
+                              setState(() => _themeMode = mode);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.sync,
+                                  color: Theme.of(context).colorScheme.primary),
+                              const SizedBox(width: 8),
+                              Text('Sincronización',
                                   style: Theme.of(context)
                                       .textTheme
                                       .titleMedium),

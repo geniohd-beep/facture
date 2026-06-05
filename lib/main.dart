@@ -5,6 +5,7 @@ import 'config/supabase_config.dart';
 import 'config/theme.dart';
 import 'services/db_init.dart';
 import 'services/sync_service.dart';
+import 'services/settings_service.dart';
 import 'models/customer.dart';
 import 'providers/auth_provider.dart';
 import 'providers/company_provider.dart';
@@ -38,11 +39,38 @@ void main() async {
 
   SyncService.instance.init();
 
-  runApp(const FactureApp());
+  final settings = SettingsService();
+  final themeMode = await settings.getThemeMode();
+
+  runApp(FactureApp(initialThemeMode: themeMode));
 }
 
-class FactureApp extends StatelessWidget {
-  const FactureApp({super.key});
+class FactureApp extends StatefulWidget {
+  final ThemeMode initialThemeMode;
+  const FactureApp({super.key, required this.initialThemeMode});
+
+  static FactureAppState? of(BuildContext context) {
+    return context.findAncestorStateOfType<FactureAppState>();
+  }
+
+  @override
+  State<FactureApp> createState() => FactureAppState();
+}
+
+class FactureAppState extends State<FactureApp> {
+  late ThemeMode _themeMode;
+
+  ThemeMode get themeMode => _themeMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _themeMode = widget.initialThemeMode;
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    setState(() => _themeMode = mode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +87,7 @@ class FactureApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.light,
+        themeMode: _themeMode,
         initialRoute: '/login',
         onGenerateRoute: (settings) {
           switch (settings.name) {
